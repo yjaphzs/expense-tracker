@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+        (function() {
+            const appearance = '{{ $appearance ?? "system" }}';
+
+            if (appearance === 'system') {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+                if (prefersDark) {
+                    document.documentElement.classList.add('dark');
+                }
+            }
+        })();
+    </script>
+    
+    <style>
+        html {
+            background-color: oklch(1.0000 0 0);
+        }
+
+        html.dark {
+            background-color: oklch(0.1776 0 0);
+        }
+    </style>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/expense-tracker/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/expense-tracker/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/expense-tracker/favicon-16x16.png">
+    <link rel="manifest" href="/expense-tracker/site.webmanifest">
+    <title>Expense Tracker - JPB</title>
+    <script type="module" crossorigin src="/expense-tracker/assets/index-DgLYqAGu.js"></script>
+    <link rel="modulepreload" crossorigin href="/expense-tracker/assets/vendor-BaUxrwC1.js">
+    <link rel="stylesheet" crossorigin href="/expense-tracker/assets/index-zQR9lihM.css">
+  <link rel="manifest" href="/expense-tracker/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/expense-tracker/registerSW.js"></script></head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
