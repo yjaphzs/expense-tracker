@@ -2,11 +2,9 @@ import { useMemo } from "react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import type { Transaction, TransactionType } from "@/types/transaction";
 
-export const TRANSACTIONS_STORAGE_KEY = "expense-tracker-transactions";
-
-export function useTransactions(autosave = true) {
+export function useTransactions(storageKey: string, autosave = true) {
   const [transactions, setTransactions] = useLocalStorage<Transaction[]>(
-    TRANSACTIONS_STORAGE_KEY,
+    storageKey,
     [],
     { enabled: autosave }
   );

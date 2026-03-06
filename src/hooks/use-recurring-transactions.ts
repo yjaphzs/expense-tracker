@@ -29,15 +29,14 @@ function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export const RECURRING_STORAGE_KEY = "expense-tracker-recurring";
-
 export function useRecurringTransactions(
+  storageKey: string,
   addTransaction: (data: Omit<Transaction, "id">) => void,
   autosave = true
 ) {
   const [recurringList, setRecurringList] = useLocalStorage<
     RecurringTransaction[]
-  >(RECURRING_STORAGE_KEY, [], { enabled: autosave });
+  >(storageKey, [], { enabled: autosave });
 
   const addRecurring = (data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">) => {
     const item: RecurringTransaction = {

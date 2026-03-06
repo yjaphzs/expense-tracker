@@ -54,21 +54,27 @@ import TransactionList from "@/components/smart/transaction-list";
 import RecurringList from "@/components/smart/recurring-list";
 import {
     useTransactions,
-    TRANSACTIONS_STORAGE_KEY,
 } from "@/hooks/use-transactions";
 import {
     useRecurringTransactions,
-    RECURRING_STORAGE_KEY,
 } from "@/hooks/use-recurring-transactions";
 import type { Transaction, RecurringTransaction } from "@/types/transaction";
-
-const AUTOSAVE_STORAGE_KEY = "expense-tracker-autosave";
 
 declare const __APP_VERSION__: string;
 
 function App() {
     const appName = import.meta.env.VITE_APP_NAME || "My App";
     const appVersion = __APP_VERSION__;
+
+    const TRANSACTIONS_STORAGE_KEY =
+        import.meta.env.VITE_APP_LOCAL_STORAGE_TRANSACTIONS_KEY ||
+        "expense_tracker_transactions";
+    const RECURRING_STORAGE_KEY =
+        import.meta.env.VITE_APP_LOCAL_STORAGE_RECURRING_KEY ||
+        "expense_tracker_recurring";
+    const AUTOSAVE_STORAGE_KEY =
+        import.meta.env.VITE_APP_LOCAL_STORAGE_AUTOSAVE_KEY ||
+        "expense_tracker_autosave";
 
     const [tab, setTab] = useState("home");
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,7 +95,7 @@ function App() {
         clearTransactions,
         summary,
         getFilteredTransactions,
-    } = useTransactions(autosave);
+    } = useTransactions(TRANSACTIONS_STORAGE_KEY, autosave);
 
     const {
         recurringList,
@@ -98,7 +104,7 @@ function App() {
         removeRecurring,
         toggleRecurring,
         processDueTransactions,
-    } = useRecurringTransactions(addTransaction, autosave);
+    } = useRecurringTransactions(RECURRING_STORAGE_KEY, addTransaction, autosave);
 
     // Auto-process due recurring transactions on mount
     useEffect(() => {
