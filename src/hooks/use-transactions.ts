@@ -1,15 +1,15 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import type { Transaction, TransactionType } from "@/types/transaction";
 
-export function useTransactions(storageKey: string, autosave = true) {
-  const [transactions, setTransactions] = useLocalStorage<Transaction[]>(
+export function useTransactions(storageKey = "expense-tracker-transactions", autosave = true) {
+  const [transactions, setTransactions, removeTransactions] = useLocalStorage<Transaction[]>(
     storageKey,
     [],
     { enabled: autosave }
   );
 
-  const addTransaction = (
+  const addTransaction = useCallback((
     data: Omit<Transaction, "id">
   ) => {
     const newTransaction: Transaction = {
@@ -17,15 +17,17 @@ export function useTransactions(storageKey: string, autosave = true) {
       id: crypto.randomUUID(),
     };
     setTransactions((prev) => [newTransaction, ...prev]);
-  };
+  }, [setTransactions]);
 
-  const removeTransaction = (id: string) => {
+  const removeTransaction = useCallback((id: string) => {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, [setTransactions]);
 
-  const clearTransactions = () => {
-    setTransactions([]);
-  };
+  const editTransaction = useCallback((id: string, data: Omit<Transaction, "id">) => {
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...data, id } : t))
+    );
+  }, [setTransactions]);
 
   const summary = useMemo(() => {
     const income = transactions
@@ -49,9 +51,10 @@ export function useTransactions(storageKey: string, autosave = true) {
   return {
     transactions,
     setTransactions,
+    removeTransactions,
     addTransaction,
     removeTransaction,
-    clearTransactions,
+    editTransaction,
     summary,
     getFilteredTransactions,
   };
