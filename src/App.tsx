@@ -1,43 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Toaster, toast } from "sonner";
 import AppHeader from "@/components/dom/app-header";
 import ThemeSwitcher from "@/components/ui/theme-switcher";
 import KofiButton from "@/components/dom/KofiButton";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import {
-    PlusIcon,
-    RotateCcwIcon,
-    RepeatIcon,
-    MoreHorizontalIcon,
-    ImportIcon,
-    DownloadIcon,
-    SaveIcon,
-    SaveAllIcon,
-} from "lucide-react";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 import {
     Tabs,
@@ -46,19 +11,19 @@ import {
     TabsTrigger
 } from "@/components/ui/tabs";
 
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import BalanceSummary from "@/components/smart/balance-summary";
-import AddTransactionDialog from "@/components/smart/add-transaction-dialog";
-import AddRecurringDialog from "@/components/smart/add-recurring-dialog";
+import TransactionDialog, { type FormMode } from "@/components/smart/add-transaction-dialog";
 import TransactionList from "@/components/smart/transaction-list";
+import type { Transaction, Wallet, RecurringTransaction } from "@/types/transaction";
+import WalletCards from "@/components/smart/wallet-cards";
 import RecurringList from "@/components/smart/recurring-list";
-import {
-    useTransactions,
-} from "@/hooks/use-transactions";
-import {
-    useRecurringTransactions,
-} from "@/hooks/use-recurring-transactions";
-import type { Transaction, RecurringTransaction } from "@/types/transaction";
+import DataToolbar from "@/components/smart/data-toolbar";
+import Analytics from "@/components/smart/analytics";
+import ExcelExport from "@/components/smart/excel-export";
+import { useTransactions } from "@/hooks/use-transactions";
+import { useWallets } from "@/hooks/use-wallets";
+import { useRecurringTransactions } from "@/hooks/use-recurring-transactions";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 
 declare const __APP_VERSION__: string;
 
@@ -66,36 +31,44 @@ function App() {
     const appName = import.meta.env.VITE_APP_NAME || "My App";
     const appVersion = __APP_VERSION__;
 
-    const TRANSACTIONS_STORAGE_KEY =
-        import.meta.env.VITE_APP_LOCAL_STORAGE_TRANSACTIONS_KEY ||
-        "expense_tracker_transactions";
-    const RECURRING_STORAGE_KEY =
-        import.meta.env.VITE_APP_LOCAL_STORAGE_RECURRING_KEY ||
-        "expense_tracker_recurring";
-    const AUTOSAVE_STORAGE_KEY =
-        import.meta.env.VITE_APP_LOCAL_STORAGE_AUTOSAVE_KEY ||
-        "expense_tracker_autosave";
+    const transactionsKey = import.meta.env.VITE_APP_LOCAL_STORAGE_TRANSACTIONS_KEY || "expense_tracker_transactions";
+    const recurringKey = import.meta.env.VITE_APP_LOCAL_STORAGE_RECURRING_KEY || "expense_tracker_recurring";
+    const autosaveKey = import.meta.env.VITE_APP_LOCAL_STORAGE_AUTOSAVE_KEY || "expense_tracker_autosave";
+    const walletsKey = "expense-tracker-wallets";
+
+    const [autosave, setAutosave] = useLocalStorage<boolean>(autosaveKey, true, { enabled: true });
 
     const [tab, setTab] = useState("home");
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+    const [dialogMode, setDialogMode] = useState<FormMode | undefined>(undefined);
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
-
-    const [autosave, setAutosave] = useLocalStorage<boolean>(
-        AUTOSAVE_STORAGE_KEY,
-        true,
-        { enabled: true }
-    );
+    const [walletManageOpen, setWalletManageOpen] = useState(false);
 
     const {
         transactions,
         setTransactions,
+        removeTransactions,
         addTransaction,
         removeTransaction,
-        clearTransactions,
+        editTransaction,
         summary,
         getFilteredTransactions,
-    } = useTransactions(TRANSACTIONS_STORAGE_KEY, autosave);
+    } = useTransactions(transactionsKey, autosave);
+
+    const handleOpenAdd = (mode?: FormMode) => {
+        setEditingTransaction(null);
+        setDialogMode(mode);
+        setDialogOpen(true);
+    };
+
+    const handleOpenEdit = (t: Transaction) => {
+        setEditingTransaction(t);
+        if (tab === "income") setDialogMode("income");
+        else if (tab === "expenses") setDialogMode("expense");
+        else setDialogMode(undefined);
+        setDialogOpen(true);
+    };
 
     const {
         recurringList,
@@ -103,47 +76,56 @@ function App() {
         addRecurring,
         removeRecurring,
         toggleRecurring,
+        clearRecurring,
         processDueTransactions,
-    } = useRecurringTransactions(RECURRING_STORAGE_KEY, addTransaction, autosave);
+    } = useRecurringTransactions(recurringKey, addTransaction, autosave);
 
-    // Auto-process due recurring transactions on mount
+    const processedRef = useRef(false);
     useEffect(() => {
+        if (processedRef.current) return;
+        processedRef.current = true;
         processDueTransactions();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [processDueTransactions]);
+
+    const {
+        wallets,
+        setWallets,
+        removeWallets,
+        addWallet,
+        removeWallet,
+        walletBalances,
+    } = useWallets(transactions, walletsKey, autosave);
+
+    const walletHasTransactions = (walletId: string) =>
+        transactions.some((t) => t.walletId === walletId);
+
+    const onTabChange = (value: string) => {
+        setTab(value);
+    };
+
+    // --- Data management handlers ---
 
     const handleSave = () => {
         try {
-            localStorage.setItem(
-                TRANSACTIONS_STORAGE_KEY,
-                JSON.stringify(transactions)
-            );
-            localStorage.setItem(
-                RECURRING_STORAGE_KEY,
-                JSON.stringify(recurringList)
-            );
+            localStorage.setItem(transactionsKey, JSON.stringify(transactions));
+            localStorage.setItem(recurringKey, JSON.stringify(recurringList));
+            localStorage.setItem(walletsKey, JSON.stringify(wallets));
+            toast.success("Data has been saved!");
         } catch {
-            // silently fail
+            toast.error("Failed to save data.");
         }
     };
 
     const handleExport = () => {
         try {
             const exportData = {
-                transactions: JSON.parse(
-                    localStorage.getItem(TRANSACTIONS_STORAGE_KEY) ?? "[]"
-                ),
-                recurring: JSON.parse(
-                    localStorage.getItem(RECURRING_STORAGE_KEY) ?? "[]"
-                ),
-                autosave: JSON.parse(
-                    localStorage.getItem(AUTOSAVE_STORAGE_KEY) ?? "true"
-                ),
+                transactions: JSON.parse(localStorage.getItem(transactionsKey) ?? "[]"),
+                recurring: JSON.parse(localStorage.getItem(recurringKey) ?? "[]"),
+                wallets: JSON.parse(localStorage.getItem(walletsKey) ?? "[]"),
+                autosave: JSON.parse(localStorage.getItem(autosaveKey) ?? "true"),
             };
 
-            const blob = new Blob(
-                [JSON.stringify(exportData, null, 2)],
-                { type: "application/json" }
-            );
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
@@ -152,8 +134,10 @@ function App() {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+
+            toast.success("Exported data as expense-tracker-export.json!");
         } catch {
-            // silently fail
+            toast.error("Failed to export data.");
         }
     };
 
@@ -176,67 +160,56 @@ function App() {
                 }
 
                 const isValidTransaction = (t: unknown): t is Transaction =>
-                    !!t &&
-                    typeof t === "object" &&
-                    "id" in t &&
+                    !!t && typeof t === "object" &&
                     typeof (t as Transaction).id === "string" &&
-                    "type" in t &&
-                    "category" in t &&
-                    "amount" in t &&
+                    typeof (t as Transaction).type === "string" &&
+                    typeof (t as Transaction).category === "string" &&
                     typeof (t as Transaction).amount === "number" &&
-                    "date" in t;
+                    typeof (t as Transaction).date === "string" &&
+                    typeof (t as Transaction).walletId === "string";
+
+                const isValidWallet = (w: unknown): w is Wallet =>
+                    !!w && typeof w === "object" &&
+                    typeof (w as Wallet).id === "string" &&
+                    typeof (w as Wallet).name === "string" &&
+                    typeof (w as Wallet).type === "string";
 
                 const isValidRecurring = (r: unknown): r is RecurringTransaction =>
-                    !!r &&
-                    typeof r === "object" &&
-                    "id" in r &&
+                    !!r && typeof r === "object" &&
                     typeof (r as RecurringTransaction).id === "string" &&
-                    "type" in r &&
-                    "category" in r &&
-                    "amount" in r &&
+                    typeof (r as RecurringTransaction).type === "string" &&
+                    typeof (r as RecurringTransaction).category === "string" &&
                     typeof (r as RecurringTransaction).amount === "number" &&
-                    "frequency" in r &&
-                    "startDate" in r;
+                    typeof (r as RecurringTransaction).frequency === "string";
 
-                if (
-                    !Array.isArray(data.transactions) ||
-                    !data.transactions.every(isValidTransaction)
-                ) {
-                    throw new Error("Invalid transactions data.");
+                if (!Array.isArray(data.transactions) || !data.transactions.every(isValidTransaction)) {
+                    throw new Error("Missing or invalid 'transactions' array.");
+                }
+                if (!Array.isArray(data.wallets) || !data.wallets.every(isValidWallet)) {
+                    throw new Error("Missing or invalid 'wallets' array.");
+                }
+                if (!Array.isArray(data.recurring) || !data.recurring.every(isValidRecurring)) {
+                    throw new Error("Missing or invalid 'recurring' array.");
+                }
+                if (typeof data.autosave !== "boolean") {
+                    throw new Error("Missing or invalid 'autosave' value.");
                 }
 
-                if (
-                    data.recurring !== undefined &&
-                    (!Array.isArray(data.recurring) ||
-                        !data.recurring.every(isValidRecurring))
-                ) {
-                    throw new Error("Invalid recurring data.");
-                }
-
-                // Apply imported data
                 setTransactions(data.transactions);
-                localStorage.setItem(
-                    TRANSACTIONS_STORAGE_KEY,
-                    JSON.stringify(data.transactions)
-                );
+                localStorage.setItem(transactionsKey, JSON.stringify(data.transactions));
 
-                if (Array.isArray(data.recurring)) {
-                    setRecurringList(data.recurring);
-                    localStorage.setItem(
-                        RECURRING_STORAGE_KEY,
-                        JSON.stringify(data.recurring)
-                    );
-                }
+                setRecurringList(data.recurring);
+                localStorage.setItem(recurringKey, JSON.stringify(data.recurring));
 
-                if (typeof data.autosave === "boolean") {
-                    setAutosave(data.autosave);
-                    localStorage.setItem(
-                        AUTOSAVE_STORAGE_KEY,
-                        JSON.stringify(data.autosave)
-                    );
-                }
+                setWallets(data.wallets);
+                localStorage.setItem(walletsKey, JSON.stringify(data.wallets));
+
+                setAutosave(data.autosave);
+                localStorage.setItem(autosaveKey, JSON.stringify(data.autosave));
+
+                toast.success("Imported data successfully!");
             } catch {
-                // silently fail on invalid import
+                toast.error("Failed to import data. Invalid file format.");
             }
         };
 
@@ -245,14 +218,17 @@ function App() {
         document.body.removeChild(input);
     };
 
-    const onTabChange = (value: string) => {
-        setTab(value);
+    const handleReset = () => {
+        removeTransactions();
+        clearRecurring();
+        removeWallets();
+        setResetDialogOpen(false);
+        toast.success("All data has been reset.");
     };
-
-    const hasData = transactions.length > 0 || recurringList.length > 0;
 
     return (
         <div className="flex flex-col items-center justify-center min-h-svh p-4">
+            <Toaster richColors position="bottom-right" />
             <main className="flex-1 flex flex-col items-center justify-center w-full">
                 <div className="w-full max-w-3xl">
                     <div className="flex flex-row items-center justify-between w-full">
@@ -260,203 +236,258 @@ function App() {
                         <ThemeSwitcher />
                     </div>
                     <Tabs value={tab} onValueChange={onTabChange}>
-                        <TabsList className="mt-8">
-                            <TabsTrigger value="home">Home</TabsTrigger>
-                            <TabsTrigger value="income">Income</TabsTrigger>
-                            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-                            <TabsTrigger value="recurring">
-                                <RepeatIcon className="size-3.5" />
-                                Recurring
-                            </TabsTrigger>
-                        </TabsList>
+                        {wallets.length > 0 && (
+                            <TabsList className="mt-8">
+                                <TabsTrigger value="home">Home</TabsTrigger>
+                                <TabsTrigger value="income">Income</TabsTrigger>
+                                <TabsTrigger value="expenses">Expenses</TabsTrigger>
+                                <TabsTrigger value="recurring">Recurring</TabsTrigger>
+                                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                            </TabsList>
+                        )}
                         <TabsContent value="home">
                             <BalanceSummary
                                 balance={summary.balance}
                                 income={summary.income}
                                 expenses={summary.expenses}
                             />
-                            <div className="flex flex-col gap-4 mt-8">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold">
-                                        Recent Transactions
-                                    </h2>
-                                    <ButtonGroup>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setDialogOpen(true)}
-                                        >
-                                            <PlusIcon className="size-4" />
-                                            Add
-                                        </Button>
-                                        {hasData && (
-                                            <AlertDialog
-                                                open={resetDialogOpen}
-                                                onOpenChange={setResetDialogOpen}
-                                            >
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="outline" size="sm">
-                                                        <RotateCcwIcon className="size-4" />
-                                                        Reset
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <RotateCcwIcon className="size-10 border rounded-lg bg-primary text-primary-foreground p-2 mx-auto sm:mx-0" />
-                                                        <AlertDialogTitle>
-                                                            Reset all data?
-                                                        </AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            This action cannot be undone. This will permanently
-                                                            delete all your transactions and recurring schedules.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction
-                                                            onClick={() => {
-                                                                clearTransactions();
-                                                                setResetDialogOpen(false);
-                                                            }}
-                                                            className="bg-destructive text-white hover:bg-destructive/90"
-                                                        >
-                                                            Reset
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                            <WalletCards
+                                wallets={wallets}
+                                walletBalances={walletBalances}
+                                onAddWallet={addWallet}
+                                onRemoveWallet={removeWallet}
+                                hasTransactions={walletHasTransactions}
+                                manageOpen={walletManageOpen}
+                                onManageOpenChange={setWalletManageOpen}
+                                onImport={handleImport}
+                            />
+                            {wallets.length > 0 && (
+                                <>
+                                    <div className="flex items-center justify-between mt-6">
+                                        <h2 className="text-lg font-semibold">Recent Transactions</h2>
+                                        {transactions.length > 0 && (
+                                            <DataToolbar
+                                                onAdd={() => handleOpenAdd()}
+                                                addLabel="Add Transaction"
+                                                handleSave={handleSave}
+                                                autosave={autosave}
+                                                setAutosave={setAutosave}
+                                                resetDialogOpen={resetDialogOpen}
+                                                setResetDialogOpen={setResetDialogOpen}
+                                                handleReset={handleReset}
+                                                handleImport={handleImport}
+                                                handleExport={handleExport}
+                                                hasWallets
+                                                hasItems
+                                                onManageWallets={() => setWalletManageOpen(true)}
+                                            />
                                         )}
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon-sm"
-                                                    aria-label="More Options"
-                                                >
-                                                    <MoreHorizontalIcon />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-52">
-                                                <DropdownMenuGroup>
-                                                    <DropdownMenuItem onClick={handleImport}>
-                                                        <ImportIcon />
-                                                        Import
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={handleExport}>
-                                                        <DownloadIcon />
-                                                        Export
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuGroup>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuGroup>
-                                                    <DropdownMenuItem onClick={handleSave}>
-                                                        <SaveIcon />
-                                                        Save
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSub>
-                                                        <DropdownMenuSubTrigger>
-                                                            <SaveAllIcon />
-                                                            Autosave
-                                                        </DropdownMenuSubTrigger>
-                                                        <DropdownMenuSubContent>
-                                                            <DropdownMenuRadioGroup
-                                                                value={autosave ? "enable" : "disabled"}
-                                                                onValueChange={(value) =>
-                                                                    setAutosave(value === "enable")
-                                                                }
-                                                            >
-                                                                <DropdownMenuRadioItem value="enable">
-                                                                    Enable
-                                                                </DropdownMenuRadioItem>
-                                                                <DropdownMenuRadioItem value="disabled">
-                                                                    Disable
-                                                                </DropdownMenuRadioItem>
-                                                            </DropdownMenuRadioGroup>
-                                                        </DropdownMenuSubContent>
-                                                    </DropdownMenuSub>
-                                                </DropdownMenuGroup>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </ButtonGroup>
-                                </div>
-                                <TransactionList
-                                    transactions={transactions}
-                                    onRemove={removeTransaction}
-                                />
-                            </div>
+                                    </div>
+                                    {transactions.length === 0 ? (
+                                        <DataToolbar
+                                            onAdd={() => handleOpenAdd()}
+                                            addLabel="Add Transaction"
+                                            handleSave={handleSave}
+                                            autosave={autosave}
+                                            setAutosave={setAutosave}
+                                            resetDialogOpen={resetDialogOpen}
+                                            setResetDialogOpen={setResetDialogOpen}
+                                            handleReset={handleReset}
+                                            handleImport={handleImport}
+                                            handleExport={handleExport}
+                                            hasWallets
+                                            hasItems={false}
+                                            onManageWallets={() => setWalletManageOpen(true)}
+                                        />
+                                    ) : (
+                                        <TransactionList
+                                            transactions={transactions}
+                                            wallets={wallets}
+                                            onRemove={removeTransaction}
+                                            onEdit={handleOpenEdit}
+                                        />
+                                    )}
+                                </>
+                            )}
                         </TabsContent>
                         <TabsContent value="income">
-                            <div className="flex flex-col gap-4 mt-4">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold">Income</h2>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setDialogOpen(true)}
-                                    >
-                                        <PlusIcon className="size-4" />
-                                        Add
-                                    </Button>
-                                </div>
+                            <div className="flex items-center justify-between mt-4">
+                                <h2 className="text-lg font-semibold">Income</h2>
+                                {wallets.length > 0 && getFilteredTransactions("income").length > 0 && (
+                                    <DataToolbar
+                                        onAdd={() => handleOpenAdd("income")}
+                                        addLabel="Add Income"
+                                        handleSave={handleSave}
+                                        autosave={autosave}
+                                        setAutosave={setAutosave}
+                                        resetDialogOpen={resetDialogOpen}
+                                        setResetDialogOpen={setResetDialogOpen}
+                                        handleReset={handleReset}
+                                        handleImport={handleImport}
+                                        handleExport={handleExport}
+                                        hasWallets
+                                        hasItems
+                                        onManageWallets={() => setWalletManageOpen(true)}
+                                    />
+                                )}
+                            </div>
+                            {wallets.length === 0 || getFilteredTransactions("income").length === 0 ? (
+                                <DataToolbar
+                                    onAdd={() => handleOpenAdd("income")}
+                                    addLabel="Add Income"
+                                    handleSave={handleSave}
+                                    autosave={autosave}
+                                    setAutosave={setAutosave}
+                                    resetDialogOpen={resetDialogOpen}
+                                    setResetDialogOpen={setResetDialogOpen}
+                                    handleReset={handleReset}
+                                    handleImport={handleImport}
+                                    handleExport={handleExport}
+                                    hasWallets={wallets.length > 0}
+                                    hasItems={getFilteredTransactions("income").length > 0}
+                                    onManageWallets={() => setWalletManageOpen(true)}
+                                    emptyTitle="No income yet"
+                                    emptyDescription="Add your first income transaction to start tracking your earnings."
+                                />
+                            ) : (
                                 <TransactionList
                                     transactions={getFilteredTransactions("income")}
+                                    wallets={wallets}
                                     onRemove={removeTransaction}
+                                    onEdit={handleOpenEdit}
                                 />
-                            </div>
+                            )}
                         </TabsContent>
                         <TabsContent value="expenses">
-                            <div className="flex flex-col gap-4 mt-4">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold">Expenses</h2>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setDialogOpen(true)}
-                                    >
-                                        <PlusIcon className="size-4" />
-                                        Add
-                                    </Button>
-                                </div>
+                            <div className="flex items-center justify-between mt-4">
+                                <h2 className="text-lg font-semibold">Expenses</h2>
+                                {wallets.length > 0 && getFilteredTransactions("expense").length > 0 && (
+                                    <DataToolbar
+                                        onAdd={() => handleOpenAdd("expense")}
+                                        addLabel="Add Expense"
+                                        handleSave={handleSave}
+                                        autosave={autosave}
+                                        setAutosave={setAutosave}
+                                        resetDialogOpen={resetDialogOpen}
+                                        setResetDialogOpen={setResetDialogOpen}
+                                        handleReset={handleReset}
+                                        handleImport={handleImport}
+                                        handleExport={handleExport}
+                                        hasWallets
+                                        hasItems
+                                        onManageWallets={() => setWalletManageOpen(true)}
+                                    />
+                                )}
+                            </div>
+                            {wallets.length === 0 || getFilteredTransactions("expense").length === 0 ? (
+                                <DataToolbar
+                                    onAdd={() => handleOpenAdd("expense")}
+                                    addLabel="Add Expense"
+                                    handleSave={handleSave}
+                                    autosave={autosave}
+                                    setAutosave={setAutosave}
+                                    resetDialogOpen={resetDialogOpen}
+                                    setResetDialogOpen={setResetDialogOpen}
+                                    handleReset={handleReset}
+                                    handleImport={handleImport}
+                                    handleExport={handleExport}
+                                    hasWallets={wallets.length > 0}
+                                    hasItems={getFilteredTransactions("expense").length > 0}
+                                    onManageWallets={() => setWalletManageOpen(true)}
+                                    emptyTitle="No expenses yet"
+                                    emptyDescription="Add your first expense to start tracking your spending."
+                                />
+                            ) : (
                                 <TransactionList
                                     transactions={getFilteredTransactions("expense")}
+                                    wallets={wallets}
                                     onRemove={removeTransaction}
+                                    onEdit={handleOpenEdit}
                                 />
-                            </div>
+                            )}
                         </TabsContent>
                         <TabsContent value="recurring">
-                            <div className="flex flex-col gap-4 mt-4">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold">Recurring Transactions</h2>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setRecurringDialogOpen(true)}
-                                    >
-                                        <PlusIcon className="size-4" />
-                                        Add
-                                    </Button>
-                                </div>
+                            <div className="flex items-center justify-between mt-4">
+                                <h2 className="text-lg font-semibold">Recurring</h2>
+                                {wallets.length > 0 && recurringList.length > 0 && (
+                                    <DataToolbar
+                                        onAdd={() => handleOpenAdd("recurring")}
+                                        addLabel="Add Recurring"
+                                        handleSave={handleSave}
+                                        autosave={autosave}
+                                        setAutosave={setAutosave}
+                                        resetDialogOpen={resetDialogOpen}
+                                        setResetDialogOpen={setResetDialogOpen}
+                                        handleReset={handleReset}
+                                        handleImport={handleImport}
+                                        handleExport={handleExport}
+                                        hasWallets
+                                        hasItems
+                                        onManageWallets={() => setWalletManageOpen(true)}
+                                    />
+                                )}
+                            </div>
+                            {wallets.length === 0 || recurringList.length === 0 ? (
+                                <DataToolbar
+                                    onAdd={() => handleOpenAdd("recurring")}
+                                    addLabel="Add Recurring"
+                                    handleSave={handleSave}
+                                    autosave={autosave}
+                                    setAutosave={setAutosave}
+                                    resetDialogOpen={resetDialogOpen}
+                                    setResetDialogOpen={setResetDialogOpen}
+                                    handleReset={handleReset}
+                                    handleImport={handleImport}
+                                    handleExport={handleExport}
+                                    hasWallets={wallets.length > 0}
+                                    hasItems={recurringList.length > 0}
+                                    onManageWallets={() => setWalletManageOpen(true)}
+                                    emptyTitle="No recurring transactions"
+                                    emptyDescription="Set up automatic income or expenses that repeat on a schedule."
+                                />
+                            ) : (
                                 <RecurringList
                                     items={recurringList}
                                     onRemove={removeRecurring}
                                     onToggle={toggleRecurring}
                                 />
+                            )}
+                        </TabsContent>
+                        <TabsContent value="analytics">
+                            <div className="flex items-center justify-between mt-4">
+                                <h2 className="text-lg font-semibold">Analytics</h2>
+                            </div>
+                            <Analytics transactions={transactions} wallets={wallets} />
+                            <div className="mt-6">
+                                <ExcelExport transactions={transactions} wallets={wallets} />
                             </div>
                         </TabsContent>
                     </Tabs>
                 </div>
             </main>
 
-            <AddTransactionDialog
+            {tab !== "home" && (
+                <WalletCards
+                    wallets={wallets}
+                    walletBalances={walletBalances}
+                    onAddWallet={addWallet}
+                    onRemoveWallet={removeWallet}
+                    hasTransactions={walletHasTransactions}
+                    manageOpen={walletManageOpen}
+                    onManageOpenChange={setWalletManageOpen}
+                    dialogsOnly
+                />
+            )}
+
+            <TransactionDialog
                 open={dialogOpen}
                 onOpenChange={setDialogOpen}
                 onAdd={addTransaction}
-            />
-
-            <AddRecurringDialog
-                open={recurringDialogOpen}
-                onOpenChange={setRecurringDialogOpen}
-                onAdd={addRecurring}
+                onEdit={editTransaction}
+                onAddRecurring={addRecurring}
+                wallets={wallets}
+                editingTransaction={editingTransaction}
+                lockedType={dialogMode}
             />
 
             <footer className="w-full flex justify-center py-6 bg-transparent">

@@ -29,6 +29,9 @@ function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Maximum number of transactions to backfill per recurring item per session
+const MAX_BACKFILL = 90;
+
 export function useRecurringTransactions(
   storageKey: string,
   addTransaction: (data: Omit<Transaction, "id">) => void,
@@ -39,10 +42,14 @@ export function useRecurringTransactions(
   >(storageKey, [], { enabled: autosave });
 
   const addRecurring = (data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">) => {
+    const today = toDateStr(new Date());
+    // If start date is in the past, set lastProcessedDate so only the next
+    // occurrence (today or future) fires — prevents mass backfill.
+    const isPast = data.startDate < today;
     const item: RecurringTransaction = {
       ...data,
       id: crypto.randomUUID(),
-      lastProcessedDate: null,
+      lastProcessedDate: isPast ? data.startDate : null,
       enabled: true,
     };
     setRecurringList((prev) => [item, ...prev]);
@@ -64,10 +71,10 @@ export function useRecurringTransactions(
 
   const processDueTransactions = useCallback(() => {
     const today = toDateStr(new Date());
-    let anyProcessed = false;
 
-    setRecurringList((prev) =>
-      prev.map((r) => {
+    setRecurringList((prev) => {
+      const pendingTransactions: Omit<Transaction, "id">[] = [];
+      const updated = prev.map((r) => {
         if (!r.enabled) return r;
 
         // Determine the first due date
@@ -76,10 +83,11 @@ export function useRecurringTransactions(
           : r.startDate;
 
         let lastProcessed = r.lastProcessedDate;
+        let count = 0;
 
-        // Generate all transactions up to today
-        while (nextDue <= today) {
-          addTransaction({
+        // Collect all transactions up to today, capped to prevent runaway backfill
+        while (nextDue <= today && count < MAX_BACKFILL) {
+          pendingTransactions.push({
             type: r.type,
             category: r.category,
             amount: r.amount,
@@ -87,20 +95,27 @@ export function useRecurringTransactions(
               ? `${r.description} (auto)`
               : `${r.category} (auto)`,
             date: nextDue,
+            walletId: r.walletId,
           });
           lastProcessed = nextDue;
-          anyProcessed = true;
           nextDue = getNextDate(nextDue, r.frequency);
+          count++;
         }
 
         if (lastProcessed !== r.lastProcessedDate) {
           return { ...r, lastProcessedDate: lastProcessed };
         }
         return r;
-      })
-    );
+      });
 
-    return anyProcessed;
+      // Nothing to process — return same reference to avoid state update
+      if (pendingTransactions.length === 0) return prev;
+
+      for (const t of pendingTransactions) {
+        addTransaction(t);
+      }
+      return updated;
+    });
   }, [addTransaction, setRecurringList]);
 
   return {

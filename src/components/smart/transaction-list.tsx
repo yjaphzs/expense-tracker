@@ -1,21 +1,7 @@
-import React, { useState } from "react";
-import {
-  Item,
-  ItemContent,
-  ItemTitle,
-  ItemDescription,
-  ItemActions,
-  ItemGroup,
-} from "@/components/ui/item";
+import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,26 +23,29 @@ import {
 import {
   Trash2Icon,
   WalletIcon,
-  MoreHorizontalIcon,
+  PencilIcon,
 } from "lucide-react";
 import { getCategoryIcon } from "@/lib/category-icons";
+import type { Transaction, Wallet } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
-import type { Transaction } from "@/types/transaction";
 
 interface TransactionListProps {
   transactions: Transaction[];
+  wallets: Wallet[];
   onRemove: (id: string) => void;
+  onEdit?: (transaction: Transaction) => void;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
+  wallets,
   onRemove,
+  onEdit,
 }) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
-
+  const walletMap = Object.fromEntries(wallets.map((w) => [w.id, w.name]));
   if (transactions.length === 0) {
     return (
-      <Empty className="mt-4 border border-dashed">
+      <Empty className="mt-4">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <WalletIcon />
@@ -99,113 +88,102 @@ const TransactionList: React.FC<TransactionListProps> = ({
     <div className="flex flex-col gap-6 mt-4">
       {sortedDates.map((date) => (
         <div key={date} className="flex flex-col gap-2">
-          <div className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <div className="text-xs font-medium text-muted-foreground/60 tracking-wider">
             {formatDate(date)}
           </div>
-          <ItemGroup className="gap-2">
+          <div className="flex flex-col gap-2">
             {grouped[date].map((t) => (
-              <Item key={t.id} variant="outline" size="sm" asChild role="listitem">
-                <div className="flex items-center w-full">
-                  <ItemContent>
-                    <ItemTitle className="line-clamp-1 text-muted-foreground text-xs">
-                      <Badge
-                        variant={t.type === "income" ? "secondary" : "outline"}
-                        className="text-[10px]"
-                      >
-                        {(() => { const Icon = getCategoryIcon(t.category); return <Icon className="size-3" />; })()}
-                        {t.category}
-                      </Badge>
-                    </ItemTitle>
-                    <ItemDescription className="text-sm font-semibold line-clamp-1 text-foreground">
-                      {t.description || t.category}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemContent>
-                    <ItemTitle className="line-clamp-1 text-muted-foreground w-full text-end text-xs">
-                      {t.type === "income" ? "Income" : "Expense"}
-                    </ItemTitle>
-                    <ItemDescription
-                      className={`text-base font-bold line-clamp-1 font-mono w-full text-end ${
-                        t.type === "income"
-                          ? "text-emerald-700 dark:text-emerald-400"
-                          : "text-rose-700 dark:text-rose-400"
-                      }`}
-                    >
-                      {t.type === "income" ? "+" : "-"}
-                      {formatCurrency(t.amount)}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="More Options"
-                        >
-                          <MoreHorizontalIcon />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52">
-                        <DropdownMenuGroup>
-                          <AlertDialog
-                            open={deleteDialogOpen === t.id}
-                            onOpenChange={(open) => {
-                              if (!open) setDeleteDialogOpen(null);
-                            }}
-                          >
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onSelect={(e) => {
-                                  e.preventDefault();
-                                  setDeleteDialogOpen(t.id);
-                                }}
-                              >
-                                <Trash2Icon className="w-4 h-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <Trash2Icon className="size-10 border rounded-lg bg-primary text-primary-foreground p-2 mx-auto sm:mx-0" />
-                                <AlertDialogTitle>
-                                  Delete this transaction?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will
-                                  permanently remove this {t.type} of{" "}
-                                  <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                                    {formatCurrency(t.amount)} ({t.category})
-                                  </code>.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel
-                                  onClick={() => setDeleteDialogOpen(null)}
-                                >
-                                  Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => {
-                                    onRemove(t.id);
-                                    setDeleteDialogOpen(null);
-                                  }}
-                                  className="bg-destructive text-white hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </ItemActions>
+              <div
+                key={t.id}
+                className="flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
+              >
+                <div
+                  className={`flex items-center justify-center size-9 rounded-full shrink-0 ${
+                    t.type === "income"
+                      ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
+                      : "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+                  }`}
+                >
+                  {(() => { const Icon = getCategoryIcon(t.category); return <Icon className="size-4" />; })()}
                 </div>
-              </Item>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">
+                      {t.description || t.category}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">
+                      {t.category}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {t.description && (
+                      <span className="text-xs text-muted-foreground truncate">
+                        {t.category}
+                      </span>
+                    )}
+                    {walletMap[t.walletId] && (
+                      <span className="text-[10px] text-muted-foreground/60">
+                        {t.description ? " · " : ""}{walletMap[t.walletId]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className={`text-sm font-mono font-bold ${
+                      t.type === "income"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {t.type === "income" ? "+" : "-"}
+                    {formatCurrency(t.amount)}
+                  </span>
+                  <ButtonGroup>
+                    {onEdit && (
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => onEdit(t)}
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </Button>
+                    )}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon-sm">
+                          <Trash2Icon className="size-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently remove this {t.type} of{" "}
+                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
+                              {formatCurrency(t.amount)}
+                            </code>{" "}
+                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
+                              ({t.category})
+                            </code>.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => onRemove(t.id)}
+                            className="bg-destructive text-white hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </ButtonGroup>
+                </div>
+              </div>
             ))}
-          </ItemGroup>
+          </div>
         </div>
       ))}
     </div>

@@ -7,7 +7,20 @@ export interface Transaction {
   amount: number;
   description: string;
   date: string; // ISO date string (YYYY-MM-DD)
+  walletId: string;
 }
+
+export type WalletType = "cash" | "e-wallet-card";
+
+export interface Wallet {
+  id: string;
+  name: string;
+  type: WalletType;
+}
+
+export const DEFAULT_WALLETS: Wallet[] = [
+  { id: "cash", name: "Cash", type: "cash" },
+];
 
 export const EXPENSE_CATEGORIES = [
   "Food",
@@ -38,7 +51,8 @@ export interface RecurringTransaction {
   amount: number;
   description: string;
   frequency: RecurrenceFrequency;
-  startDate: string; // ISO date string (YYYY-MM-DD)
-  lastProcessedDate: string | null; // last date a transaction was auto-created
+  startDate: string;
+  lastProcessedDate: string | null;
   enabled: boolean;
+  walletId: string;
 }

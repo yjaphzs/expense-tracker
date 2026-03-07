@@ -1,73 +1,79 @@
-# React + TypeScript + Vite
+# Expense Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A personal finance tracker built with React, TypeScript, and Vite. Track your income and expenses across multiple wallets — all data is stored locally in your browser.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Track Income & Expenses** — Record transactions with categories like Food, Travel, Bills, Salary, Allowance, and more.
+- **Multiple Wallets** — Track separate balances for Cash, E-Wallet, Cards, Bank accounts, or any custom wallet you create.
+- **Balance Summary** — See your total balance, income, and expenses at a glance.
+- **Per-Wallet Balances** — View the balance of each individual wallet on the Home tab.
+- **Manage Wallets** — Add new wallets with custom names and icons, or remove unused ones.
+- **Transaction History** — Grouped by date with color-coded income (green) and expense (red) indicators.
+- **Filter by Type** — Dedicated tabs for viewing only Income or only Expenses.
+- **Delete Transactions** — Remove any transaction with a confirmation dialog.
+- **Dark Mode** — Toggle between light and dark themes.
+- **Local Storage** — All data persists in your browser across sessions. No backend required.
+- **PWA Ready** — Installable as a Progressive Web App.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- [Vite](https://vite.dev/) for bundling and dev server
+- [Tailwind CSS v4](https://tailwindcss.com/) for styling
+- [shadcn/ui](https://ui.shadcn.com/) (New York style) for UI components
+- [Radix UI](https://www.radix-ui.com/) primitives
+- [Lucide React](https://lucide.dev/) for icons
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- [Node.js](https://nodejs.org/) (v18+)
+- npm or pnpm
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Install & Run
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Project Structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+  App.tsx                         # Main app layout and routing
+  main.tsx                        # Entry point
+  index.css                       # Global styles and CSS variables
+  types/
+    transaction.ts                # Transaction & Wallet types, category constants
+  hooks/
+    use-transactions.ts           # Transaction CRUD + summary (localStorage)
+    use-wallets.ts                # Wallet CRUD + per-wallet balances (localStorage)
+    use-local-storage.ts          # Generic localStorage hook
+    use-appearance.tsx            # Theme (light/dark) hook
+  components/
+    smart/
+      add-transaction-dialog.tsx  # Form dialog to add income/expense
+      transaction-list.tsx        # Grouped transaction list with delete
+      balance-summary.tsx         # Total balance, income, expenses display
+      wallet-cards.tsx            # Wallet grid + manage/add wallets dialogs
+    ui/                           # shadcn/ui primitives (button, dialog, tabs, etc.)
+    dom/                          # App-specific DOM components (header, Ko-fi button)
+  lib/
+    utils.ts                      # cn() helper, formatCurrency()
+```
+
+## License
+
+Private project.
