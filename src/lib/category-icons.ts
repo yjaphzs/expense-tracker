@@ -12,6 +12,7 @@ import {
   LaptopIcon,
   TrendingUpIcon,
   GiftIcon,
+  ArrowLeftRightIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,8 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Freelance: LaptopIcon,
   Investment: TrendingUpIcon,
   Gift: GiftIcon,
+  // Transfer
+  Transfer: ArrowLeftRightIcon,
   // Fallback
   Other: CircleEllipsisIcon,
 };

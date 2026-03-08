@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogClose,
@@ -9,15 +9,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, BanknoteIcon, CreditCardIcon } from "lucide-react";
+import { getCategoryIcon } from "@/lib/category-icons";
 import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
@@ -40,15 +47,23 @@ interface AddRecurringDialogProps {
   onAdd: (
     data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">
   ) => void;
+  onEdit?: (
+    id: string,
+    data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">
+  ) => void;
   wallets: Wallet[];
+  editingRecurring?: RecurringTransaction | null;
 }
 
 const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
   open,
   onOpenChange,
   onAdd,
+  onEdit,
   wallets,
+  editingRecurring,
 }) => {
+  const isEditing = !!editingRecurring;
   const [type, setType] = useState<TransactionType>("expense");
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
@@ -58,6 +73,22 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
   const [startDate, setStartDate] = useState<Date>(() => new Date());
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  useEffect(() => {
+    if (open && editingRecurring) {
+      setType(editingRecurring.type);
+      setCategory(editingRecurring.category);
+      setAmount(String(editingRecurring.amount));
+      setDescription(editingRecurring.description);
+      setFrequency(editingRecurring.frequency);
+      setWalletId(editingRecurring.walletId);
+      const d = new Date(editingRecurring.startDate + "T00:00:00");
+      setStartDate(d);
+      setCalendarMonth(d);
+    } else if (open) {
+      resetForm();
+    }
+  }, [open, editingRecurring]);
 
   const categories =
     type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
@@ -86,15 +117,27 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
       return `${y}-${m}-${day}`;
     };
 
-    onAdd({
-      type,
-      category,
-      amount: parsedAmount,
-      description: description.trim(),
-      frequency,
-      startDate: toDateStr(startDate),
-      walletId,
-    });
+    if (isEditing && onEdit) {
+      onEdit(editingRecurring.id, {
+        type,
+        category,
+        amount: parsedAmount,
+        description: description.trim(),
+        frequency,
+        startDate: toDateStr(startDate),
+        walletId,
+      });
+    } else {
+      onAdd({
+        type,
+        category,
+        amount: parsedAmount,
+        description: description.trim(),
+        frequency,
+        startDate: toDateStr(startDate),
+        walletId,
+      });
+    }
     resetForm();
     onOpenChange(false);
   };
@@ -105,9 +148,9 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Add Recurring Transaction</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Recurring Transaction" : "Add Recurring Transaction"}</DialogTitle>
           <DialogDescription>
-            Set up automatic transactions that repeat on a schedule.
+            {isEditing ? "Update the details of this recurring transaction." : "Set up automatic transactions that repeat on a schedule."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
@@ -143,35 +186,44 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
           {/* Category */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium">Category</label>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
-                <Badge
-                  key={cat}
-                  variant={category === cat ? "secondary" : "outline"}
-                  className="cursor-pointer select-none"
-                  onClick={() => setCategory(cat)}
-                >
-                  {cat}
-                </Badge>
-              ))}
-            </div>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => {
+                  const Icon = getCategoryIcon(cat);
+                  return (
+                    <SelectItem key={cat} value={cat}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="size-4" />
+                        {cat}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Wallet */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium">Wallet</label>
-            <div className="flex flex-wrap gap-2">
-              {wallets.map((w) => (
-                <Badge
-                  key={w.id}
-                  variant={walletId === w.id ? "default" : "outline"}
-                  className="cursor-pointer select-none"
-                  onClick={() => setWalletId(w.id)}
-                >
-                  {w.name}
-                </Badge>
-              ))}
-            </div>
+            <Select value={walletId} onValueChange={setWalletId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a wallet" />
+              </SelectTrigger>
+              <SelectContent>
+                {wallets.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    <span className="flex items-center gap-2">
+                      {w.type === "cash" ? <BanknoteIcon className="size-4" /> : <CreditCardIcon className="size-4" />}
+                      {w.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Amount */}
@@ -207,18 +259,18 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
           {/* Frequency */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium">Frequency</label>
-            <div className="flex flex-wrap gap-2">
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <Badge
-                  key={opt.value}
-                  variant={frequency === opt.value ? "default" : "outline"}
-                  className="cursor-pointer select-none"
-                  onClick={() => setFrequency(opt.value)}
-                >
-                  {opt.label}
-                </Badge>
-              ))}
-            </div>
+            <Select value={frequency} onValueChange={(v) => setFrequency(v as RecurrenceFrequency)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FREQUENCY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Start Date */}
@@ -267,7 +319,7 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
               </Button>
             </DialogClose>
             <Button type="submit" disabled={!isValid}>
-              Save
+              {isEditing ? "Save Changes" : "Save"}
             </Button>
           </DialogFooter>
         </form>

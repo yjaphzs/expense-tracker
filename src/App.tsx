@@ -11,7 +11,7 @@ import {
     TabsTrigger
 } from "@/components/ui/tabs";
 
-import { PlusIcon, WalletIcon, RepeatIcon } from "lucide-react";
+import { PlusIcon, WalletIcon, RepeatIcon, ArrowLeftRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -28,6 +28,8 @@ import TransactionList from "@/components/smart/transaction-list";
 import type { Transaction, Wallet, RecurringTransaction } from "@/types/transaction";
 import WalletCards from "@/components/smart/wallet-cards";
 import RecurringList from "@/components/smart/recurring-list";
+import AddRecurringDialog from "@/components/smart/add-recurring-dialog";
+import TransferDialog from "@/components/smart/transfer-dialog";
 import DataToolbar from "@/components/smart/data-toolbar";
 import Analytics from "@/components/smart/analytics";
 import ExcelExport from "@/components/smart/excel-export";
@@ -53,7 +55,10 @@ function App() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<FormMode | undefined>(undefined);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+    const [editingRecurring, setEditingRecurring] = useState<RecurringTransaction | null>(null);
+    const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
+    const [transferDialogOpen, setTransferDialogOpen] = useState(false);
     const [walletManageOpen, setWalletManageOpen] = useState(false);
 
     const {
@@ -87,6 +92,7 @@ function App() {
         addRecurring,
         removeRecurring,
         toggleRecurring,
+        editRecurring,
         clearRecurring,
         processDueTransactions,
     } = useRecurringTransactions(recurringKey, addTransaction, autosave);
@@ -272,6 +278,13 @@ function App() {
                                 onManageOpenChange={setWalletManageOpen}
                                 onImport={handleImport}
                             />
+                            {wallets.length >= 2 && (
+                                <div className="mt-4">
+                                    <Button variant="outline" size="sm" onClick={() => setTransferDialogOpen(true)}>
+                                        <ArrowLeftRightIcon className="size-4" /> Transfer Between Wallets
+                                    </Button>
+                                </div>
+                            )}
                             {wallets.length > 0 && (
                                 <>
                                     <div className="flex items-center justify-between mt-6">
@@ -452,6 +465,10 @@ function App() {
                                     items={recurringList}
                                     onRemove={removeRecurring}
                                     onToggle={toggleRecurring}
+                                    onEdit={(r) => {
+                                        setEditingRecurring(r);
+                                        setRecurringDialogOpen(true);
+                                    }}
                                 />
                             )}
                         </TabsContent>
@@ -490,6 +507,28 @@ function App() {
                 wallets={wallets}
                 editingTransaction={editingTransaction}
                 lockedType={dialogMode}
+            />
+
+            <AddRecurringDialog
+                open={recurringDialogOpen}
+                onOpenChange={(open) => {
+                    setRecurringDialogOpen(open);
+                    if (!open) setEditingRecurring(null);
+                }}
+                onAdd={addRecurring}
+                onEdit={editRecurring}
+                wallets={wallets}
+                editingRecurring={editingRecurring}
+            />
+
+            <TransferDialog
+                open={transferDialogOpen}
+                onOpenChange={setTransferDialogOpen}
+                wallets={wallets}
+                onTransfer={(fromTx, toTx) => {
+                    addTransaction(fromTx);
+                    addTransaction(toTx);
+                }}
             />
 
             <footer className="w-full flex justify-center py-6 bg-transparent">

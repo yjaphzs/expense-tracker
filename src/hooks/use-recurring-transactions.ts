@@ -65,6 +65,12 @@ export function useRecurringTransactions(
     );
   };
 
+  const editRecurring = (id: string, data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">) => {
+    setRecurringList((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, ...data } : r))
+    );
+  };
+
   const clearRecurring = () => {
     setRecurringList([]);
   };
@@ -124,6 +130,7 @@ export function useRecurringTransactions(
     addRecurring,
     removeRecurring,
     toggleRecurring,
+    editRecurring,
     clearRecurring,
     processDueTransactions,
   };
