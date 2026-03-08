@@ -437,7 +437,7 @@ function PaletteSelector({ value, onChange }: { value: string; onChange: (v: str
         <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">Colors:</span>
             <Select value={value} onValueChange={onChange}>
-                <SelectTrigger className="w-[150px]" size="sm">
+                <SelectTrigger className="w-[200px]" size="sm">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

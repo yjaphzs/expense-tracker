@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
     types: [opened, reopened, synchronize]
 
@@ -22,4 +21,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          paginate-path: 'repository.pullRequest.commits'
+          commitish: main
