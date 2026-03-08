@@ -26,14 +26,6 @@ export default defineConfig({
         minify: 'esbuild',
         rollupOptions: {
             output: {
-                manualChunks(id) {
-                    if (id.includes('node_modules')) {
-                        if (id.includes('html5-qrcode') || id.includes('qrcode.react') || id.includes('lz-string')) {
-                            return 'qr-vendor';
-                        }
-                        return 'vendor';
-                    }
-                },
                 entryFileNames: `assets/[name]-[hash].js`, 
                 chunkFileNames: `assets/[name]-[hash].js`,
                 assetFileNames: `assets/[name]-[hash].[ext]`,
