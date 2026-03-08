@@ -40,6 +40,7 @@ import {
   MoreHorizontalIcon,
   PauseIcon,
   PlayIcon,
+  PencilIcon,
 } from "lucide-react";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { formatCurrency } from "@/lib/utils";
@@ -66,12 +67,14 @@ interface RecurringListProps {
   items: RecurringTransaction[];
   onRemove: (id: string) => void;
   onToggle: (id: string) => void;
+  onEdit?: (item: RecurringTransaction) => void;
 }
 
 const RecurringList: React.FC<RecurringListProps> = ({
   items,
   onRemove,
   onToggle,
+  onEdit,
 }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -182,6 +185,12 @@ const RecurringList: React.FC<RecurringListProps> = ({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
                   <DropdownMenuGroup>
+                    {onEdit && (
+                      <DropdownMenuItem onSelect={() => onEdit(r)}>
+                        <PencilIcon className="w-4 h-4" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onSelect={() => onToggle(r.id)}
                     >

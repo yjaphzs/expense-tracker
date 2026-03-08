@@ -44,13 +44,13 @@ const BalanceSummary: React.FC<BalanceSummaryProps> = ({
             Total Balance
         </div>
         <div className="flex flex-row gap-3 mt-3">
-            <div className="flex-1 flex items-center justify-between border border-dashed px-4 py-2 rounded-lg bg-muted/30">
+            <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between border border-dashed px-4 py-2 rounded-lg bg-muted/30">
                 <div className="text-xs text-muted-foreground">Income</div>
                 <div className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-400">
                     {formatCurrency(income)}
                 </div>
             </div>
-            <div className="flex-1 flex items-center justify-between border border-dashed px-4 py-2 rounded-lg bg-muted/30">
+            <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between border border-dashed px-4 py-2 rounded-lg bg-muted/30">
                 <div className="text-xs text-muted-foreground">Expenses</div>
                 <div className="text-lg font-mono font-bold text-rose-700 dark:text-rose-400">
                     {formatCurrency(expenses)}

@@ -28,6 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
     Empty,
@@ -39,6 +40,8 @@ import {
 import { BarChart3Icon } from "lucide-react";
 import type { Transaction, Wallet } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
+import { useLocalStorage } from "@/hooks/use-local-storage";
+import { getCategoryIcon } from "@/lib/category-icons";
 
 interface AnalyticsProps {
     transactions: Transaction[];
@@ -52,16 +55,86 @@ const PERIOD_OPTIONS = [
     { value: "all", label: "All time" },
 ];
 
-const PIE_COLORS = [
-    "var(--chart-1)",
-    "var(--chart-2)",
-    "var(--chart-3)",
-    "var(--chart-4)",
-    "var(--chart-5)",
-    "oklch(0.65 0.15 160)",   // teal
-    "oklch(0.65 0.20 30)",    // coral
-    "oklch(0.70 0.15 270)",   // purple
-];
+const PIE_COLOR_PALETTES: Record<string, { label: string; colors: string[] }> = {
+    default: {
+        label: "Default",
+        colors: [
+            "var(--chart-1)",
+            "var(--chart-2)",
+            "var(--chart-3)",
+            "var(--chart-4)",
+            "var(--chart-5)",
+            "oklch(0.65 0.15 160)",
+            "oklch(0.65 0.20 30)",
+            "oklch(0.70 0.15 270)",
+        ],
+    },
+    pastel: {
+        label: "Pastel",
+        colors: [
+            "oklch(0.82 0.10 20)",
+            "oklch(0.82 0.10 80)",
+            "oklch(0.82 0.10 140)",
+            "oklch(0.82 0.10 200)",
+            "oklch(0.82 0.10 260)",
+            "oklch(0.82 0.10 320)",
+            "oklch(0.78 0.12 50)",
+            "oklch(0.78 0.12 170)",
+        ],
+    },
+    vivid: {
+        label: "Vivid",
+        colors: [
+            "oklch(0.65 0.25 30)",
+            "oklch(0.65 0.25 90)",
+            "oklch(0.65 0.25 150)",
+            "oklch(0.65 0.25 210)",
+            "oklch(0.65 0.25 270)",
+            "oklch(0.65 0.25 330)",
+            "oklch(0.55 0.20 60)",
+            "oklch(0.55 0.20 180)",
+        ],
+    },
+    warm: {
+        label: "Warm",
+        colors: [
+            "oklch(0.70 0.20 25)",
+            "oklch(0.75 0.18 50)",
+            "oklch(0.65 0.22 15)",
+            "oklch(0.72 0.16 70)",
+            "oklch(0.68 0.19 40)",
+            "oklch(0.60 0.21 5)",
+            "oklch(0.78 0.14 60)",
+            "oklch(0.63 0.23 35)",
+        ],
+    },
+    cool: {
+        label: "Cool",
+        colors: [
+            "oklch(0.65 0.18 220)",
+            "oklch(0.70 0.16 250)",
+            "oklch(0.60 0.20 190)",
+            "oklch(0.72 0.14 280)",
+            "oklch(0.67 0.17 170)",
+            "oklch(0.58 0.19 240)",
+            "oklch(0.75 0.13 200)",
+            "oklch(0.62 0.21 260)",
+        ],
+    },
+    monochrome: {
+        label: "Monochrome",
+        colors: [
+            "oklch(0.40 0 0)",
+            "oklch(0.50 0 0)",
+            "oklch(0.58 0 0)",
+            "oklch(0.65 0 0)",
+            "oklch(0.72 0 0)",
+            "oklch(0.78 0 0)",
+            "oklch(0.84 0 0)",
+            "oklch(0.90 0 0)",
+        ],
+    },
+};
 
 function filterByPeriod(transactions: Transaction[], months: string) {
     if (months === "all") return transactions;
@@ -75,12 +148,12 @@ function filterByPeriod(transactions: Transaction[], months: string) {
 }
 
 // --- Chart 1: Monthly Income vs Expense Bar Chart ---
-const barChartConfig = {
-    income: { label: "Income", color: "oklch(0.72 0.17 155)" },
-    expense: { label: "Expense", color: "oklch(0.63 0.21 25)" },
-} satisfies ChartConfig;
+function MonthlyBarChart({ transactions, incomeColor, expenseColor }: { transactions: Transaction[]; incomeColor: string; expenseColor: string }) {
+    const barChartConfig = useMemo(() => ({
+        income: { label: "Income", color: incomeColor },
+        expense: { label: "Expense", color: expenseColor },
+    } satisfies ChartConfig), [incomeColor, expenseColor]);
 
-function MonthlyBarChart({ transactions }: { transactions: Transaction[] }) {
     const data = useMemo(() => {
         const map = new Map<string, { month: string; income: number; expense: number }>();
         for (const t of transactions) {
@@ -126,7 +199,7 @@ function MonthlyBarChart({ transactions }: { transactions: Transaction[] }) {
 }
 
 // --- Chart 2: Category Pie Chart ---
-function CategoryPieChart({ transactions, type }: { transactions: Transaction[]; type: "expense" | "income" }) {
+function CategoryPieChart({ transactions, type, pieColors }: { transactions: Transaction[]; type: "expense" | "income"; pieColors: string[] }) {
     const data = useMemo(() => {
         const map = new Map<string, number>();
         for (const t of transactions.filter((t) => t.type === type)) {
@@ -142,11 +215,11 @@ function CategoryPieChart({ transactions, type }: { transactions: Transaction[];
         data.forEach((d, i) => {
             config[d.category] = {
                 label: d.category,
-                color: PIE_COLORS[i % PIE_COLORS.length],
+                color: pieColors[i % pieColors.length],
             };
         });
         return config;
-    }, [data]);
+    }, [data, pieColors]);
 
     if (data.length === 0) return null;
 
@@ -176,7 +249,7 @@ function CategoryPieChart({ transactions, type }: { transactions: Transaction[];
                         strokeWidth={2}
                     >
                         {data.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            <Cell key={i} fill={pieColors[i % pieColors.length]} />
                         ))}
                         <LabelList
                             dataKey="amount"
@@ -193,7 +266,7 @@ function CategoryPieChart({ transactions, type }: { transactions: Transaction[];
                     <Badge key={d.category} variant="outline" className="gap-1.5 text-xs">
                         <span
                             className="inline-block size-2.5 rounded-full"
-                            style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                            style={{ background: pieColors[i % pieColors.length] }}
                         />
                         {d.category}: {formatCurrency(d.amount)} ({(d.amount / total * 100).toFixed(1)}%)
                     </Badge>
@@ -204,11 +277,10 @@ function CategoryPieChart({ transactions, type }: { transactions: Transaction[];
 }
 
 // --- Chart 3: Daily Cash Flow Area Chart ---
-const areaChartConfig = {
-    cumulative: { label: "Net Cash Flow", color: "var(--chart-5)" },
-} satisfies ChartConfig;
-
-function DailyCashFlowChart({ transactions }: { transactions: Transaction[] }) {
+function DailyCashFlowChart({ transactions, color }: { transactions: Transaction[]; color: string }) {
+    const areaChartConfig = useMemo(() => ({
+        cumulative: { label: "Net Cash Flow", color },
+    } satisfies ChartConfig), [color]);
     const data = useMemo(() => {
         const map = new Map<string, number>();
         for (const t of transactions) {
@@ -275,11 +347,10 @@ function DailyCashFlowChart({ transactions }: { transactions: Transaction[] }) {
 }
 
 // --- Chart 4: Wallet Balance Comparison ---
-const walletChartConfig = {
-    balance: { label: "Balance", color: "var(--chart-3)" },
-} satisfies ChartConfig;
-
-function WalletComparisonChart({ wallets, transactions }: { wallets: Wallet[]; transactions: Transaction[] }) {
+function WalletComparisonChart({ wallets, transactions, color }: { wallets: Wallet[]; transactions: Transaction[]; color: string }) {
+    const walletChartConfig = useMemo(() => ({
+        balance: { label: "Balance", color },
+    } satisfies ChartConfig), [color]);
     const data = useMemo(() => {
         const balances: Record<string, number> = {};
         for (const w of wallets) balances[w.id] = 0;
@@ -315,10 +386,90 @@ function WalletComparisonChart({ wallets, transactions }: { wallets: Wallet[]; t
     );
 }
 
+// --- Category Ranking ---
+function CategoryRanking({ transactions, type, pieColors }: { transactions: Transaction[]; type: "expense" | "income"; pieColors: string[] }) {
+    const data = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const t of transactions.filter((t) => t.type === type)) {
+            map.set(t.category, (map.get(t.category) ?? 0) + t.amount);
+        }
+        return Array.from(map.entries())
+            .map(([category, amount]) => ({ category, amount }))
+            .sort((a, b) => b.amount - a.amount);
+    }, [transactions, type]);
+
+    if (data.length === 0) {
+        return (
+            <p className="text-sm text-muted-foreground text-center py-4">
+                No {type} transactions found.
+            </p>
+        );
+    }
+
+    const total = data.reduce((sum, d) => sum + d.amount, 0);
+
+    return (
+        <div className="flex flex-col gap-2">
+            {data.map((d, i) => {
+                const Icon = getCategoryIcon(d.category);
+                const pct = (d.amount / total * 100).toFixed(1);
+                return (
+                    <div key={d.category} className="flex items-center gap-3 rounded-md border px-3 py-2">
+                        <span className="text-sm font-bold text-muted-foreground w-5 text-center">{i + 1}</span>
+                        <span
+                            className="inline-block size-3 rounded-full shrink-0"
+                            style={{ background: pieColors[i % pieColors.length] }}
+                        />
+                        <Icon className="size-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm font-medium flex-1 truncate">{d.category}</span>
+                        <span className="text-sm tabular-nums">{formatCurrency(d.amount)}</span>
+                        <span className="text-xs text-muted-foreground w-12 text-right">{pct}%</span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+// --- Color Palette Selector ---
+function PaletteSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+    return (
+        <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Colors:</span>
+            <Select value={value} onValueChange={onChange}>
+                <SelectTrigger className="w-[150px]" size="sm">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {Object.entries(PIE_COLOR_PALETTES).map(([key, palette]) => (
+                        <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                                <div className="flex gap-0.5">
+                                    {palette.colors.slice(0, 5).map((c, i) => (
+                                        <span
+                                            key={i}
+                                            className="inline-block size-2.5 rounded-full"
+                                            style={{ background: c }}
+                                        />
+                                    ))}
+                                </div>
+                                {palette.label}
+                            </div>
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+    );
+}
+
 // --- Main Analytics Component ---
 const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
     const [period, setPeriod] = useState("6");
-    const [pieType, setPieType] = useState<"expense" | "income">("expense");
+    const [analyticsTab, setAnalyticsTab] = useState("overall");
+    const [paletteKey, setPaletteKey] = useLocalStorage("analytics-palette", "default");
+
+    const pieColors = PIE_COLOR_PALETTES[paletteKey]?.colors ?? PIE_COLOR_PALETTES.default.colors;
 
     const filtered = useMemo(() => filterByPeriod(transactions, period), [transactions, period]);
 
@@ -340,59 +491,90 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
 
     return (
         <div className="flex flex-col gap-6 mt-4">
-            {/* Period selector */}
-            <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">Period:</span>
-                <Select value={period} onValueChange={setPeriod}>
-                    <SelectTrigger className="w-[180px]" size="sm">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {PERIOD_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Chart 1: Monthly Income vs Expense */}
-            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
-                <h3 className="text-sm font-semibold mb-3">Monthly Income vs Expense</h3>
-                <MonthlyBarChart transactions={filtered} />
-            </section>
-
-            {/* Chart 2: Category Breakdown */}
-            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold">Category Breakdown</h3>
-                    <Select value={pieType} onValueChange={(v) => setPieType(v as "expense" | "income")}>
-                        <SelectTrigger className="w-[130px]" size="sm">
+            {/* Period & Palette selectors */}
+            <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Period:</span>
+                    <Select value={period} onValueChange={setPeriod}>
+                        <SelectTrigger className="w-[180px]" size="sm">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="expense">Expenses</SelectItem>
-                            <SelectItem value="income">Income</SelectItem>
+                            {PERIOD_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                    {o.label}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>
-                <CategoryPieChart transactions={filtered} type={pieType} />
-            </section>
+                <PaletteSelector value={paletteKey} onChange={setPaletteKey} />
+            </div>
 
-            {/* Chart 3: Daily Cash Flow */}
-            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
-                <h3 className="text-sm font-semibold mb-3">Cumulative Cash Flow</h3>
-                <DailyCashFlowChart transactions={filtered} />
-            </section>
+            {/* Sub-tabs */}
+            <Tabs value={analyticsTab} onValueChange={setAnalyticsTab}>
+                <TabsList>
+                    <TabsTrigger value="overall">Overall</TabsTrigger>
+                    <TabsTrigger value="income">Income</TabsTrigger>
+                    <TabsTrigger value="expense">Expense</TabsTrigger>
+                </TabsList>
 
-            {/* Chart 4: Wallet Comparison (only if 2+ wallets) */}
-            {wallets.length >= 2 && (
-                <section className="border border-dashed rounded-lg p-4 bg-muted/30">
-                    <h3 className="text-sm font-semibold mb-3">Wallet Balance Comparison</h3>
-                    <WalletComparisonChart wallets={wallets} transactions={filtered} />
-                </section>
-            )}
+                {/* --- Overall Tab --- */}
+                <TabsContent value="overall" className="flex flex-col gap-6">
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Monthly Income vs Expense</h3>
+                        <MonthlyBarChart transactions={filtered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />
+                    </section>
+
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Expense Category Breakdown</h3>
+                        <CategoryPieChart transactions={filtered} type="expense" pieColors={pieColors} />
+                    </section>
+
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Income Category Breakdown</h3>
+                        <CategoryPieChart transactions={filtered} type="income" pieColors={pieColors} />
+                    </section>
+
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Cumulative Cash Flow</h3>
+                        <DailyCashFlowChart transactions={filtered} color={pieColors[4 % pieColors.length]} />
+                    </section>
+
+                    {wallets.length >= 2 && (
+                        <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                            <h3 className="text-sm font-semibold mb-3">Wallet Balance Comparison</h3>
+                            <WalletComparisonChart wallets={wallets} transactions={filtered} color={pieColors[2 % pieColors.length]} />
+                        </section>
+                    )}
+                </TabsContent>
+
+                {/* --- Income Tab --- */}
+                <TabsContent value="income" className="flex flex-col gap-6">
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Income Category Breakdown</h3>
+                        <CategoryPieChart transactions={filtered} type="income" pieColors={pieColors} />
+                    </section>
+
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Income Ranking by Category</h3>
+                        <CategoryRanking transactions={filtered} type="income" pieColors={pieColors} />
+                    </section>
+                </TabsContent>
+
+                {/* --- Expense Tab --- */}
+                <TabsContent value="expense" className="flex flex-col gap-6">
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Expense Category Breakdown</h3>
+                        <CategoryPieChart transactions={filtered} type="expense" pieColors={pieColors} />
+                    </section>
+
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Expense Ranking by Category</h3>
+                        <CategoryRanking transactions={filtered} type="expense" pieColors={pieColors} />
+                    </section>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 };
