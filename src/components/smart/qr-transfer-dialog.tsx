@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Html5Qrcode } from "html5-qrcode";
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
 import {
     Dialog,
@@ -133,7 +132,7 @@ function ReceiveMode({ onImport, onClose }: {
     const [error, setError] = useState<string | null>(null);
     const [receivedChunks, setReceivedChunks] = useState<Map<number, string>>(new Map());
     const [totalChunks, setTotalChunks] = useState<number | null>(null);
-    const scannerRef = useRef<Html5Qrcode | null>(null);
+    const scannerRef = useRef<InstanceType<typeof import("html5-qrcode")["Html5Qrcode"]> | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const stateRef = useRef({ receivedChunks: new Map<number, string>(), totalChunks: null as number | null });
 
@@ -199,6 +198,7 @@ function ReceiveMode({ onImport, onClose }: {
         stateRef.current = { receivedChunks: new Map(), totalChunks: null };
 
         try {
+            const { Html5Qrcode } = await import("html5-qrcode");
             const scanner = new Html5Qrcode("qr-reader");
             scannerRef.current = scanner;
 
