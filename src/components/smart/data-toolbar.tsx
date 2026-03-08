@@ -118,6 +118,16 @@ const DataToolbar: React.FC<DataToolbarProps> = ({
                           <ImportIcon className="size-4" />
                           Import Data
                         </Button>
+                        {onQrTransfer && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={onQrTransfer}
+                            >
+                              <QrCodeIcon className="size-4" />
+                              QR Transfer
+                            </Button>
+                        )}
                     </div>
                 </EmptyContent>
             </Empty>
@@ -154,6 +164,16 @@ const DataToolbar: React.FC<DataToolbarProps> = ({
                           <ImportIcon className="size-4" />
                           Import Data
                         </Button>
+                        {onQrTransfer && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={onQrTransfer}
+                            >
+                              <QrCodeIcon className="size-4" />
+                              QR Transfer
+                            </Button>
+                        )}
                     </div>
                 </EmptyContent>
             </Empty>
