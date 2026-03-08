@@ -30,6 +30,7 @@ import WalletCards from "@/components/smart/wallet-cards";
 import RecurringList from "@/components/smart/recurring-list";
 import AddRecurringDialog from "@/components/smart/add-recurring-dialog";
 import TransferDialog from "@/components/smart/transfer-dialog";
+import QrTransferDialog from "@/components/smart/qr-transfer-dialog";
 import DataToolbar from "@/components/smart/data-toolbar";
 import Analytics from "@/components/smart/analytics";
 import ExcelExport from "@/components/smart/excel-export";
@@ -59,6 +60,7 @@ function App() {
     const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
     const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+    const [qrTransferOpen, setQrTransferOpen] = useState(false);
     const [walletManageOpen, setWalletManageOpen] = useState(false);
 
     const {
@@ -301,6 +303,7 @@ function App() {
                                                 handleReset={handleReset}
                                                 handleImport={handleImport}
                                                 handleExport={handleExport}
+                                                onQrTransfer={() => setQrTransferOpen(true)}
                                                 hasWallets
                                                 hasItems
                                                 onManageWallets={() => setWalletManageOpen(true)}
@@ -319,6 +322,7 @@ function App() {
                                             handleReset={handleReset}
                                             handleImport={handleImport}
                                             handleExport={handleExport}
+                                            onQrTransfer={() => setQrTransferOpen(true)}
                                             hasWallets
                                             hasItems={false}
                                             onManageWallets={() => setWalletManageOpen(true)}
@@ -528,6 +532,26 @@ function App() {
                 onTransfer={(fromTx, toTx) => {
                     addTransaction(fromTx);
                     addTransaction(toTx);
+                }}
+            />
+
+            <QrTransferDialog
+                open={qrTransferOpen}
+                onOpenChange={setQrTransferOpen}
+                transactions={transactions}
+                wallets={wallets}
+                recurring={recurringList}
+                autosave={autosave}
+                onImport={(data) => {
+                    setTransactions(data.transactions);
+                    localStorage.setItem(transactionsKey, JSON.stringify(data.transactions));
+                    setRecurringList(data.recurring);
+                    localStorage.setItem(recurringKey, JSON.stringify(data.recurring));
+                    setWallets(data.wallets);
+                    localStorage.setItem(walletsKey, JSON.stringify(data.wallets));
+                    setAutosave(data.autosave);
+                    localStorage.setItem(autosaveKey, JSON.stringify(data.autosave));
+                    toast.success("Data imported via QR transfer!");
                 }}
             />
 

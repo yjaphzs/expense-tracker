@@ -42,6 +42,7 @@ import {
     SaveIcon,
     SaveAllIcon,
     WalletIcon,
+    QrCodeIcon,
 } from "lucide-react";
 
 interface DataToolbarProps {
@@ -56,6 +57,7 @@ interface DataToolbarProps {
     handleReset: () => void;
     handleImport: () => void;
     handleExport: () => void;
+    onQrTransfer?: () => void;
     hasWallets: boolean;
     hasItems: boolean;
     onManageWallets: () => void;
@@ -77,6 +79,7 @@ const DataToolbar: React.FC<DataToolbarProps> = ({
     handleReset,
     handleImport,
     handleExport,
+    onQrTransfer,
     hasWallets,
     hasItems,
     onManageWallets,
@@ -229,6 +232,12 @@ const DataToolbar: React.FC<DataToolbarProps> = ({
                         <DownloadIcon />
                         Export
                     </DropdownMenuItem>
+                    {onQrTransfer && (
+                        <DropdownMenuItem onClick={onQrTransfer}>
+                            <QrCodeIcon />
+                            QR Transfer
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>

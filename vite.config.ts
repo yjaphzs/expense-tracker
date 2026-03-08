@@ -14,6 +14,7 @@ export default defineConfig({
             registerType: 'autoUpdate',
             workbox: {
                 cleanupOutdatedCaches: true,
+                maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
             },
         }),
     ],
@@ -27,6 +28,9 @@ export default defineConfig({
             output: {
                 manualChunks(id) {
                     if (id.includes('node_modules')) {
+                        if (id.includes('html5-qrcode') || id.includes('qrcode.react') || id.includes('lz-string')) {
+                            return 'qr-vendor';
+                        }
                         return 'vendor';
                     }
                 },
