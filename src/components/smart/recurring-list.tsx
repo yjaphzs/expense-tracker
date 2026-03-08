@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Item,
   ItemContent,
@@ -44,6 +44,16 @@ import {
 import { getCategoryIcon } from "@/lib/category-icons";
 import { formatCurrency } from "@/lib/utils";
 import type { RecurringTransaction } from "@/types/transaction";
+import Paginator from "@/components/smart/paginator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -64,6 +74,17 @@ const RecurringList: React.FC<RecurringListProps> = ({
   onToggle,
 }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
+  const totalPages = Math.ceil(items.length / pageSize);
+  const safePage = Math.min(currentPage, totalPages || 1);
+  if (safePage !== currentPage) setCurrentPage(safePage);
+
+  const paged = useMemo(
+    () => items.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [items, safePage, pageSize]
+  );
 
   if (items.length === 0) {
     return (
@@ -82,8 +103,31 @@ const RecurringList: React.FC<RecurringListProps> = ({
   }
 
   return (
+    <>
+    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-4">
+      <span>Show</span>
+      <Select
+        value={String(pageSize)}
+        onValueChange={(v) => {
+          setPageSize(Number(v));
+          setCurrentPage(1);
+        }}
+      >
+        <SelectTrigger className="h-7 w-[70px] text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PAGE_SIZE_OPTIONS.map((n) => (
+            <SelectItem key={n} value={String(n)}>
+              {n}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span>per page</span>
+    </div>
     <ItemGroup className="gap-2 mt-4">
-      {items.map((r) => (
+      {paged.map((r) => (
         <Item
           key={r.id}
           variant="outline"
@@ -212,6 +256,14 @@ const RecurringList: React.FC<RecurringListProps> = ({
         </Item>
       ))}
     </ItemGroup>
+    <div className="mt-4">
+      <Paginator
+        currentPage={safePage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
+    </div>
+    </>
   );
 };
 

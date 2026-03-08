@@ -11,6 +11,17 @@ import {
     TabsTrigger
 } from "@/components/ui/tabs";
 
+import { PlusIcon, WalletIcon, RepeatIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Empty,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+    EmptyDescription,
+    EmptyContent,
+} from "@/components/ui/empty";
+
 import BalanceSummary from "@/components/smart/balance-summary";
 import TransactionDialog, { type FormMode } from "@/components/smart/add-transaction-dialog";
 import TransactionList from "@/components/smart/transaction-list";
@@ -314,41 +325,38 @@ function App() {
                             <div className="flex items-center justify-between mt-4">
                                 <h2 className="text-lg font-semibold">Income</h2>
                                 {wallets.length > 0 && getFilteredTransactions("income").length > 0 && (
-                                    <DataToolbar
-                                        onAdd={() => handleOpenAdd("income")}
-                                        addLabel="Add Income"
-                                        handleSave={handleSave}
-                                        autosave={autosave}
-                                        setAutosave={setAutosave}
-                                        resetDialogOpen={resetDialogOpen}
-                                        setResetDialogOpen={setResetDialogOpen}
-                                        handleReset={handleReset}
-                                        handleImport={handleImport}
-                                        handleExport={handleExport}
-                                        hasWallets
-                                        hasItems
-                                        onManageWallets={() => setWalletManageOpen(true)}
-                                    />
+                                    <Button variant="outline" size="sm" onClick={() => handleOpenAdd("income")}>
+                                        <PlusIcon className="size-4" />
+                                        Add Income
+                                    </Button>
                                 )}
                             </div>
-                            {wallets.length === 0 || getFilteredTransactions("income").length === 0 ? (
-                                <DataToolbar
-                                    onAdd={() => handleOpenAdd("income")}
-                                    addLabel="Add Income"
-                                    handleSave={handleSave}
-                                    autosave={autosave}
-                                    setAutosave={setAutosave}
-                                    resetDialogOpen={resetDialogOpen}
-                                    setResetDialogOpen={setResetDialogOpen}
-                                    handleReset={handleReset}
-                                    handleImport={handleImport}
-                                    handleExport={handleExport}
-                                    hasWallets={wallets.length > 0}
-                                    hasItems={getFilteredTransactions("income").length > 0}
-                                    onManageWallets={() => setWalletManageOpen(true)}
-                                    emptyTitle="No income yet"
-                                    emptyDescription="Add your first income transaction to start tracking your earnings."
-                                />
+                            {wallets.length === 0 ? (
+                                <Empty className="border border-dashed mt-4">
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon"><WalletIcon /></EmptyMedia>
+                                        <EmptyTitle>No Wallets Found</EmptyTitle>
+                                        <EmptyDescription>You need to add a wallet before you can start tracking transactions.</EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={() => setWalletManageOpen(true)}>
+                                            <PlusIcon className="size-4" /> Add Wallet
+                                        </Button>
+                                    </EmptyContent>
+                                </Empty>
+                            ) : getFilteredTransactions("income").length === 0 ? (
+                                <Empty className="border border-dashed mt-4">
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon"><WalletIcon /></EmptyMedia>
+                                        <EmptyTitle>No income yet</EmptyTitle>
+                                        <EmptyDescription>Add your first income transaction to start tracking your earnings.</EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenAdd("income")}>
+                                            <PlusIcon className="size-4" /> Add Income
+                                        </Button>
+                                    </EmptyContent>
+                                </Empty>
                             ) : (
                                 <TransactionList
                                     transactions={getFilteredTransactions("income")}
@@ -362,41 +370,38 @@ function App() {
                             <div className="flex items-center justify-between mt-4">
                                 <h2 className="text-lg font-semibold">Expenses</h2>
                                 {wallets.length > 0 && getFilteredTransactions("expense").length > 0 && (
-                                    <DataToolbar
-                                        onAdd={() => handleOpenAdd("expense")}
-                                        addLabel="Add Expense"
-                                        handleSave={handleSave}
-                                        autosave={autosave}
-                                        setAutosave={setAutosave}
-                                        resetDialogOpen={resetDialogOpen}
-                                        setResetDialogOpen={setResetDialogOpen}
-                                        handleReset={handleReset}
-                                        handleImport={handleImport}
-                                        handleExport={handleExport}
-                                        hasWallets
-                                        hasItems
-                                        onManageWallets={() => setWalletManageOpen(true)}
-                                    />
+                                    <Button variant="outline" size="sm" onClick={() => handleOpenAdd("expense")}>
+                                        <PlusIcon className="size-4" />
+                                        Add Expense
+                                    </Button>
                                 )}
                             </div>
-                            {wallets.length === 0 || getFilteredTransactions("expense").length === 0 ? (
-                                <DataToolbar
-                                    onAdd={() => handleOpenAdd("expense")}
-                                    addLabel="Add Expense"
-                                    handleSave={handleSave}
-                                    autosave={autosave}
-                                    setAutosave={setAutosave}
-                                    resetDialogOpen={resetDialogOpen}
-                                    setResetDialogOpen={setResetDialogOpen}
-                                    handleReset={handleReset}
-                                    handleImport={handleImport}
-                                    handleExport={handleExport}
-                                    hasWallets={wallets.length > 0}
-                                    hasItems={getFilteredTransactions("expense").length > 0}
-                                    onManageWallets={() => setWalletManageOpen(true)}
-                                    emptyTitle="No expenses yet"
-                                    emptyDescription="Add your first expense to start tracking your spending."
-                                />
+                            {wallets.length === 0 ? (
+                                <Empty className="border border-dashed mt-4">
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon"><WalletIcon /></EmptyMedia>
+                                        <EmptyTitle>No Wallets Found</EmptyTitle>
+                                        <EmptyDescription>You need to add a wallet before you can start tracking transactions.</EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={() => setWalletManageOpen(true)}>
+                                            <PlusIcon className="size-4" /> Add Wallet
+                                        </Button>
+                                    </EmptyContent>
+                                </Empty>
+                            ) : getFilteredTransactions("expense").length === 0 ? (
+                                <Empty className="border border-dashed mt-4">
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon"><WalletIcon /></EmptyMedia>
+                                        <EmptyTitle>No expenses yet</EmptyTitle>
+                                        <EmptyDescription>Add your first expense to start tracking your spending.</EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenAdd("expense")}>
+                                            <PlusIcon className="size-4" /> Add Expense
+                                        </Button>
+                                    </EmptyContent>
+                                </Empty>
                             ) : (
                                 <TransactionList
                                     transactions={getFilteredTransactions("expense")}
@@ -410,41 +415,38 @@ function App() {
                             <div className="flex items-center justify-between mt-4">
                                 <h2 className="text-lg font-semibold">Recurring</h2>
                                 {wallets.length > 0 && recurringList.length > 0 && (
-                                    <DataToolbar
-                                        onAdd={() => handleOpenAdd("recurring")}
-                                        addLabel="Add Recurring"
-                                        handleSave={handleSave}
-                                        autosave={autosave}
-                                        setAutosave={setAutosave}
-                                        resetDialogOpen={resetDialogOpen}
-                                        setResetDialogOpen={setResetDialogOpen}
-                                        handleReset={handleReset}
-                                        handleImport={handleImport}
-                                        handleExport={handleExport}
-                                        hasWallets
-                                        hasItems
-                                        onManageWallets={() => setWalletManageOpen(true)}
-                                    />
+                                    <Button variant="outline" size="sm" onClick={() => handleOpenAdd("recurring")}>
+                                        <PlusIcon className="size-4" />
+                                        Add Recurring
+                                    </Button>
                                 )}
                             </div>
-                            {wallets.length === 0 || recurringList.length === 0 ? (
-                                <DataToolbar
-                                    onAdd={() => handleOpenAdd("recurring")}
-                                    addLabel="Add Recurring"
-                                    handleSave={handleSave}
-                                    autosave={autosave}
-                                    setAutosave={setAutosave}
-                                    resetDialogOpen={resetDialogOpen}
-                                    setResetDialogOpen={setResetDialogOpen}
-                                    handleReset={handleReset}
-                                    handleImport={handleImport}
-                                    handleExport={handleExport}
-                                    hasWallets={wallets.length > 0}
-                                    hasItems={recurringList.length > 0}
-                                    onManageWallets={() => setWalletManageOpen(true)}
-                                    emptyTitle="No recurring transactions"
-                                    emptyDescription="Set up automatic income or expenses that repeat on a schedule."
-                                />
+                            {wallets.length === 0 ? (
+                                <Empty className="border border-dashed mt-4">
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon"><WalletIcon /></EmptyMedia>
+                                        <EmptyTitle>No Wallets Found</EmptyTitle>
+                                        <EmptyDescription>You need to add a wallet before you can set up recurring transactions.</EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={() => setWalletManageOpen(true)}>
+                                            <PlusIcon className="size-4" /> Add Wallet
+                                        </Button>
+                                    </EmptyContent>
+                                </Empty>
+                            ) : recurringList.length === 0 ? (
+                                <Empty className="border border-dashed mt-4">
+                                    <EmptyHeader>
+                                        <EmptyMedia variant="icon"><RepeatIcon /></EmptyMedia>
+                                        <EmptyTitle>No recurring transactions</EmptyTitle>
+                                        <EmptyDescription>Set up automatic income or expenses that repeat on a schedule.</EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <Button variant="outline" size="sm" onClick={() => handleOpenAdd("recurring")}>
+                                            <PlusIcon className="size-4" /> Add Recurring
+                                        </Button>
+                                    </EmptyContent>
+                                </Empty>
                             ) : (
                                 <RecurringList
                                     items={recurringList}
