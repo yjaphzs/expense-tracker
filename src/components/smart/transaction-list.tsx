@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -28,6 +28,16 @@ import {
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { Transaction, Wallet } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
+import Paginator from "@/components/smart/paginator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -43,6 +53,26 @@ const TransactionList: React.FC<TransactionListProps> = ({
   onEdit,
 }) => {
   const walletMap = Object.fromEntries(wallets.map((w) => [w.id, w.name]));
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
+  // Sort all transactions by date descending, then paginate
+  const sorted = useMemo(
+    () => [...transactions].sort((a, b) => b.date.localeCompare(a.date)),
+    [transactions]
+  );
+
+  const totalPages = Math.ceil(sorted.length / pageSize);
+
+  // Reset page if it goes out of bounds
+  const safePage = Math.min(currentPage, totalPages || 1);
+  if (safePage !== currentPage) setCurrentPage(safePage);
+
+  const paged = useMemo(
+    () => sorted.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [sorted, safePage, pageSize]
+  );
+
   if (transactions.length === 0) {
     return (
       <Empty className="mt-4">
@@ -59,8 +89,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
     );
   }
 
-  // Group transactions by date
-  const grouped = transactions.reduce<Record<string, Transaction[]>>(
+  // Group the paged transactions by date
+  const grouped = paged.reduce<Record<string, Transaction[]>>(
     (acc, t) => {
       const key = t.date;
       if (!acc[key]) acc[key] = [];
@@ -86,6 +116,28 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
   return (
     <div className="flex flex-col gap-6 mt-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Show</span>
+        <Select
+          value={String(pageSize)}
+          onValueChange={(v) => {
+            setPageSize(Number(v));
+            setCurrentPage(1);
+          }}
+        >
+          <SelectTrigger className="h-7 w-[70px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span>per page</span>
+      </div>
       {sortedDates.map((date) => (
         <div key={date} className="flex flex-col gap-2">
           <div className="text-xs font-medium text-muted-foreground/60 tracking-wider">
@@ -186,6 +238,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
           </div>
         </div>
       ))}
+      <Paginator
+        currentPage={safePage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 };

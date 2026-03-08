@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subYears, isWithinInterval } from "date-fns";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import {
     Select,
@@ -81,7 +81,37 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
             return;
         }
 
-        // Transactions sheet
+        // --- Theme-matched color palette ---
+        const colors = {
+            primary: "FBB217",       // golden foreground
+            primaryLight: "3D2E0A",  // muted gold on dark
+            income: "22C55E",        // green-500
+            incomeBg: "0D2818",      // dark green tint
+            expense: "EF4444",       // red-500
+            expenseBg: "2D0F0F",     // dark red tint
+            headerText: "090909",    // dark background text
+            dark: "090909",          // background
+            darkAlt: "121212",       // alternating row
+            foreground: "FBB217",    // golden foreground
+            muted: "A0A0A0",
+            border: "2A2A2A",
+            white: "F5F5F5",
+            netPositive: "22C55E",   // green
+            netNegative: "EF4444",   // red
+        };
+
+        const headerStyle = {
+            font: { bold: true, color: { rgb: colors.dark }, sz: 11 },
+            fill: { fgColor: { rgb: colors.primary } },
+            alignment: { horizontal: "center" as const, vertical: "center" as const },
+            border: {
+                bottom: { style: "thin" as const, color: { rgb: colors.primary } },
+            },
+        };
+
+        const currencyFmt = '#,##0.00';
+
+        // --- Transactions sheet ---
         const txRows = filtered
             .sort((a, b) => a.date.localeCompare(b.date))
             .map((t) => ({
@@ -93,7 +123,39 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
                 Wallet: walletMap.get(t.walletId) ?? t.walletId,
             }));
 
-        // Summary sheet
+        const wsTx = XLSX.utils.json_to_sheet(txRows);
+        wsTx["!cols"] = [
+            { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 20 },
+        ];
+
+        // Style header row
+        const txHeaders = ["A1", "B1", "C1", "D1", "E1", "F1"];
+        for (const ref of txHeaders) {
+            if (wsTx[ref]) wsTx[ref].s = headerStyle;
+        }
+
+        // Style data rows (text color only, no background)
+        for (let i = 0; i < txRows.length; i++) {
+            const row = i + 2;
+            const isIncome = txRows[i].Type === "Income";
+            const typeColor = isIncome ? colors.income : colors.expense;
+
+            const ref_B = `B${row}`;
+            if (wsTx[ref_B]) {
+                wsTx[ref_B].s = { font: { bold: true, color: { rgb: typeColor } } };
+            }
+            const ref_E = `E${row}`;
+            if (wsTx[ref_E]) {
+                wsTx[ref_E].s = {
+                    font: { color: { rgb: typeColor } },
+                    numFmt: currencyFmt,
+                    alignment: { horizontal: "right" as const },
+                };
+                wsTx[ref_E].z = currencyFmt;
+            }
+        }
+
+        // --- Summary sheet ---
         const income = filtered.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
         const expense = filtered.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
 
@@ -110,7 +172,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
             { Label: "Total Expenses", Value: expense },
             { Label: "Net Balance", Value: income - expense },
             { Label: "", Value: "" },
-            { Label: "--- Category Breakdown ---", Value: "" },
+            { Label: "Category Breakdown", Value: "" },
             ...Array.from(categoryMap.entries())
                 .sort(([, a], [, b]) => b.amount - a.amount)
                 .map(([key, val]) => ({
@@ -119,7 +181,42 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
                 })),
         ];
 
-        // Monthly breakdown sheet
+        const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+        wsSummary["!cols"] = [{ wch: 35 }, { wch: 18 }];
+
+        // Style summary header
+        if (wsSummary["A1"]) wsSummary["A1"].s = headerStyle;
+        if (wsSummary["B1"]) wsSummary["B1"].s = headerStyle;
+
+        // Style summary data rows
+        const summaryLabelStyles: Record<string, object> = {
+            "Total Income": { font: { bold: true, color: { rgb: colors.income }, sz: 11 } },
+            "Total Expenses": { font: { bold: true, color: { rgb: colors.expense }, sz: 11 } },
+            "Net Balance": { font: { bold: true, color: { rgb: income - expense >= 0 ? colors.netPositive : colors.netNegative }, sz: 12 } },
+            "Category Breakdown": { font: { bold: true, color: { rgb: colors.primary }, sz: 11 } },
+        };
+
+        for (let i = 0; i < summaryRows.length; i++) {
+            const row = i + 2;
+            const label = summaryRows[i].Label;
+            const style = summaryLabelStyles[label];
+            if (style) {
+                if (wsSummary[`A${row}`]) wsSummary[`A${row}`].s = style;
+                if (wsSummary[`B${row}`]) {
+                    wsSummary[`B${row}`].s = { ...style, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                    wsSummary[`B${row}`].z = currencyFmt;
+                }
+            } else if (label && typeof summaryRows[i].Value === "number") {
+                const isIncomeCat = label.startsWith("Income");
+                const catColor = isIncomeCat ? colors.income : colors.expense;
+                if (wsSummary[`B${row}`]) {
+                    wsSummary[`B${row}`].s = { font: { color: { rgb: catColor } }, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                    wsSummary[`B${row}`].z = currencyFmt;
+                }
+            }
+        }
+
+        // --- Monthly breakdown sheet ---
         const monthlyMap = new Map<string, { income: number; expense: number }>();
         for (const t of filtered) {
             const key = format(parseISO(t.date), "yyyy-MM");
@@ -138,26 +235,42 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
                 Net: data.income - data.expense,
             }));
 
-        // Build workbook
-        const wb = XLSX.utils.book_new();
-
-        const wsTx = XLSX.utils.json_to_sheet(txRows);
-        wsTx["!cols"] = [
-            { wch: 12 }, // Date
-            { wch: 10 }, // Type
-            { wch: 15 }, // Category
-            { wch: 30 }, // Description
-            { wch: 15 }, // Amount
-            { wch: 20 }, // Wallet
-        ];
-        XLSX.utils.book_append_sheet(wb, wsTx, "Transactions");
-
-        const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-        wsSummary["!cols"] = [{ wch: 35 }, { wch: 18 }];
-        XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
-
         const wsMonthly = XLSX.utils.json_to_sheet(monthlyRows);
         wsMonthly["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+
+        // Style monthly header
+        for (const ref of ["A1", "B1", "C1", "D1"]) {
+            if (wsMonthly[ref]) wsMonthly[ref].s = headerStyle;
+        }
+
+        // Style monthly data rows (text color only, no background)
+        for (let i = 0; i < monthlyRows.length; i++) {
+            const row = i + 2;
+            const net = monthlyRows[i].Net;
+
+            if (wsMonthly[`A${row}`]) wsMonthly[`A${row}`].s = { font: { bold: true } };
+            if (wsMonthly[`B${row}`]) {
+                wsMonthly[`B${row}`].s = { font: { color: { rgb: colors.income } }, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                wsMonthly[`B${row}`].z = currencyFmt;
+            }
+            if (wsMonthly[`C${row}`]) {
+                wsMonthly[`C${row}`].s = { font: { color: { rgb: colors.expense } }, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                wsMonthly[`C${row}`].z = currencyFmt;
+            }
+            if (wsMonthly[`D${row}`]) {
+                wsMonthly[`D${row}`].s = {
+                    font: { bold: true, color: { rgb: net >= 0 ? colors.netPositive : colors.netNegative } },
+                    numFmt: currencyFmt,
+                    alignment: { horizontal: "right" as const },
+                };
+                wsMonthly[`D${row}`].z = currencyFmt;
+            }
+        }
+
+        // --- Build workbook ---
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsTx, "Transactions");
+        XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
         XLSX.utils.book_append_sheet(wb, wsMonthly, "Monthly Breakdown");
 
         // Generate filename
