@@ -289,7 +289,7 @@ function App() {
                             )}
                             {wallets.length > 0 && (
                                 <>
-                                    <div className="flex items-center justify-between mt-6">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-6 gap-4">
                                         <h2 className="text-lg font-semibold">Recent Transactions</h2>
                                         {transactions.length > 0 && (
                                             <DataToolbar
