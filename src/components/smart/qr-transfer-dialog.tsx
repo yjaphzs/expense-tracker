@@ -129,6 +129,7 @@ function ReceiveMode({ onImport, onClose }: {
     onClose: () => void;
 }) {
     const [scanning, setScanning] = useState(false);
+    const [starting, setStarting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [receivedChunks, setReceivedChunks] = useState<Map<number, string>>(new Map());
     const [totalChunks, setTotalChunks] = useState<number | null>(null);
@@ -190,29 +191,47 @@ function ReceiveMode({ onImport, onClose }: {
         }
     }, [processComplete]);
 
-    const startScanner = useCallback(async () => {
-        if (!containerRef.current) return;
+    const startScanner = useCallback(() => {
         setError(null);
         setReceivedChunks(new Map());
         setTotalChunks(null);
         stateRef.current = { receivedChunks: new Map(), totalChunks: null };
+        setStarting(true);
+    }, []);
 
-        try {
-            const { Html5Qrcode } = await import("html5-qrcode");
-            const scanner = new Html5Qrcode("qr-reader");
-            scannerRef.current = scanner;
+    // Actually start the scanner after the container is visible
+    useEffect(() => {
+        if (!starting || scanning) return;
+        let cancelled = false;
 
-            await scanner.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => handleScanResult(decodedText),
-                () => {} // ignore errors during scanning
-            );
-            setScanning(true);
-        } catch {
-            setError("Could not access camera. Please grant camera permission and try again.");
-        }
-    }, [handleScanResult]);
+        (async () => {
+            try {
+                const { Html5Qrcode } = await import("html5-qrcode");
+                if (cancelled) return;
+                const scanner = new Html5Qrcode("qr-reader");
+                scannerRef.current = scanner;
+
+                await scanner.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => handleScanResult(decodedText),
+                    () => {}
+                );
+                if (cancelled) {
+                    await scanner.stop().catch(() => {});
+                    return;
+                }
+                setScanning(true);
+            } catch {
+                if (!cancelled) {
+                    setError("Could not access camera. Please grant camera permission and try again.");
+                    setStarting(false);
+                }
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [starting, scanning, handleScanResult]);
 
     const stopScanner = useCallback(async () => {
         if (scannerRef.current) {
@@ -223,6 +242,7 @@ function ReceiveMode({ onImport, onClose }: {
             scannerRef.current = null;
         }
         setScanning(false);
+        setStarting(false);
     }, []);
 
     // Cleanup on unmount
@@ -240,12 +260,12 @@ function ReceiveMode({ onImport, onClose }: {
             <div
                 id="qr-reader"
                 ref={containerRef}
-                className="w-full max-w-[300px] aspect-square rounded-lg overflow-hidden bg-muted"
-                style={{ display: scanning ? "block" : "none" }}
+                className="w-full aspect-square rounded-lg overflow-hidden bg-muted [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover"
+                style={{ display: (starting || scanning) ? "block" : "none" }}
             />
 
-            {!scanning && (
-                <div className="w-full max-w-[300px] aspect-square rounded-lg bg-muted flex items-center justify-center">
+            {!starting && !scanning && (
+                <div className="w-full aspect-square rounded-lg bg-muted flex items-center justify-center">
                     <div className="text-center text-muted-foreground">
                         <ScanLineIcon className="size-12 mx-auto mb-2" />
                         <p className="text-sm">Press Start to open camera</p>
@@ -266,6 +286,7 @@ function ReceiveMode({ onImport, onClose }: {
             <Button
                 variant={scanning ? "destructive" : "default"}
                 size="sm"
+                disabled={starting && !scanning}
                 onClick={scanning ? stopScanner : startScanner}
             >
                 {scanning ? (
@@ -292,7 +313,7 @@ const QrTransferDialog: React.FC<QrTransferDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>QR Transfer</DialogTitle>
                     <DialogDescription>
