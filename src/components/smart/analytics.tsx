@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfWeek, endOfWeek, eachWeekOfInterval, eachDayOfInterval, subWeeks } from "date-fns";
 import {
     Bar,
     BarChart,
@@ -37,7 +37,8 @@ import {
     EmptyTitle,
     EmptyDescription,
 } from "@/components/ui/empty";
-import { BarChart3Icon } from "lucide-react";
+import { BarChart3Icon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Transaction, Wallet } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -431,6 +432,341 @@ function CategoryRanking({ transactions, type, pieColors }: { transactions: Tran
     );
 }
 
+// --- Chart 5: Weekly Income vs Expense Bar Chart ---
+function WeeklyBarChart({ transactions, incomeColor, expenseColor }: { transactions: Transaction[]; incomeColor: string; expenseColor: string }) {
+    const barChartConfig = useMemo(() => ({
+        income: { label: "Income", color: incomeColor },
+        expense: { label: "Expense", color: expenseColor },
+    } satisfies ChartConfig), [incomeColor, expenseColor]);
+
+    const data = useMemo(() => {
+        const map = new Map<string, { week: string; income: number; expense: number }>();
+        for (const t of transactions) {
+            const d = parseISO(t.date);
+            const weekStart = startOfWeek(d, { weekStartsOn: 1 });
+            const key = format(weekStart, "yyyy-MM-dd");
+            if (!map.has(key)) map.set(key, { week: key, income: 0, expense: 0 });
+            const entry = map.get(key)!;
+            if (t.type === "income") entry.income += t.amount;
+            else entry.expense += t.amount;
+        }
+        return Array.from(map.values()).sort((a, b) => a.week.localeCompare(b.week));
+    }, [transactions]);
+
+    if (data.length === 0) return null;
+
+    return (
+        <ChartContainer config={barChartConfig} className="aspect-auto h-[300px] w-full">
+            <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                    dataKey="week"
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v: string) => format(parseISO(v), "MMM d")}
+                />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                <ChartTooltip
+                    content={
+                        <ChartTooltipContent
+                            labelFormatter={(v: string) => {
+                                const start = parseISO(v);
+                                const end = endOfWeek(start, { weekStartsOn: 1 });
+                                return `Week of ${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
+                            }}
+                            formatter={(value, name) => (
+                                <span>
+                                    {barChartConfig[name as keyof typeof barChartConfig]?.label}: {formatCurrency(value as number)}
+                                </span>
+                            )}
+                        />
+                    }
+                />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="income" fill="var(--color-income)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expense" fill="var(--color-expense)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+        </ChartContainer>
+    );
+}
+
+// --- Month Tracker: Detailed view for a single month ---
+function MonthTracker({ transactions, pieColors }: { transactions: Transaction[]; pieColors: string[] }) {
+    const [monthOffset, setMonthOffset] = useState(0);
+
+    const currentMonth = useMemo(() => subMonths(new Date(), monthOffset), [monthOffset]);
+
+    const monthTransactions = useMemo(() => {
+        const start = startOfMonth(currentMonth);
+        const end = endOfMonth(currentMonth);
+        return transactions.filter(t => {
+            const d = parseISO(t.date);
+            return isWithinInterval(d, { start, end });
+        });
+    }, [transactions, currentMonth]);
+
+    const summary = useMemo(() => {
+        let income = 0, expense = 0;
+        for (const t of monthTransactions) {
+            if (t.type === "income") income += t.amount;
+            else expense += t.amount;
+        }
+        const daysInMonth = endOfMonth(currentMonth).getDate();
+        const daysPassed = monthOffset === 0
+            ? Math.min(new Date().getDate(), daysInMonth)
+            : daysInMonth;
+        return {
+            income,
+            expense,
+            net: income - expense,
+            dailyAvgExpense: daysPassed > 0 ? expense / daysPassed : 0,
+            weeklyAvgExpense: daysPassed > 0 ? (expense / daysPassed) * 7 : 0,
+        };
+    }, [monthTransactions, currentMonth, monthOffset]);
+
+    const weeklyBreakdown = useMemo(() => {
+        const start = startOfMonth(currentMonth);
+        const end = endOfMonth(currentMonth);
+        const weeks = eachWeekOfInterval({ start, end }, { weekStartsOn: 1 });
+
+        const barChartConfig: ChartConfig = {
+            income: { label: "Income", color: pieColors[0] },
+            expense: { label: "Expense", color: pieColors[1] },
+        };
+
+        const data = weeks.map(weekStart => {
+            const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+            const effectiveStart = weekStart < start ? start : weekStart;
+            const effectiveEnd = weekEnd > end ? end : weekEnd;
+
+            let income = 0, expense = 0;
+            for (const t of monthTransactions) {
+                const d = parseISO(t.date);
+                if (isWithinInterval(d, { start: effectiveStart, end: effectiveEnd })) {
+                    if (t.type === "income") income += t.amount;
+                    else expense += t.amount;
+                }
+            }
+
+            return {
+                week: `${format(effectiveStart, "MMM d")} – ${format(effectiveEnd, "d")}`,
+                income,
+                expense,
+            };
+        });
+
+        return { data, config: barChartConfig };
+    }, [monthTransactions, currentMonth, pieColors]);
+
+    return (
+        <div className="flex flex-col gap-6">
+            {/* Month Navigator */}
+            <div className="flex items-center justify-center gap-3">
+                <Button variant="outline" size="icon" className="size-8" onClick={() => setMonthOffset(o => o + 1)}>
+                    <ChevronLeftIcon className="size-4" />
+                </Button>
+                <span className="text-sm font-semibold min-w-[140px] text-center">
+                    {format(currentMonth, "MMMM yyyy")}
+                </span>
+                <Button variant="outline" size="icon" className="size-8" onClick={() => setMonthOffset(o => Math.max(0, o - 1))} disabled={monthOffset === 0}>
+                    <ChevronRightIcon className="size-4" />
+                </Button>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Income</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(summary.income)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Expense</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatCurrency(summary.expense)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Net</p>
+                    <p className={`text-lg font-bold ${summary.net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(summary.net)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Avg/Week</p>
+                    <p className="text-lg font-bold">{formatCurrency(summary.weeklyAvgExpense)}</p>
+                </div>
+            </div>
+
+            {/* Weekly breakdown bar chart within the month */}
+            {weeklyBreakdown.data.length > 0 && (
+                <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                    <h3 className="text-sm font-semibold mb-3">Weekly Breakdown</h3>
+                    <ChartContainer config={weeklyBreakdown.config} className="aspect-auto h-[250px] w-full">
+                        <BarChart data={weeklyBreakdown.data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                            <CartesianGrid vertical={false} />
+                            <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} />
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                            <ChartTooltip
+                                content={
+                                    <ChartTooltipContent
+                                        formatter={(value, name) => (
+                                            <span>
+                                                {weeklyBreakdown.config[name as string]?.label}: {formatCurrency(value as number)}
+                                            </span>
+                                        )}
+                                    />
+                                }
+                            />
+                            <ChartLegend content={<ChartLegendContent />} />
+                            <Bar dataKey="income" fill="var(--color-income)" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="expense" fill="var(--color-expense)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ChartContainer>
+                </section>
+            )}
+
+            {/* Category breakdown for the month */}
+            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3">Expense Categories This Month</h3>
+                <CategoryPieChart transactions={monthTransactions} type="expense" pieColors={pieColors} />
+            </section>
+
+            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3">Expense Ranking This Month</h3>
+                <CategoryRanking transactions={monthTransactions} type="expense" pieColors={pieColors} />
+            </section>
+        </div>
+    );
+}
+
+// --- Week Tracker: Detailed view for a single week ---
+function WeekTracker({ transactions, pieColors }: { transactions: Transaction[]; pieColors: string[] }) {
+    const [weekOffset, setWeekOffset] = useState(0);
+
+    const currentWeekDate = useMemo(() => subWeeks(new Date(), weekOffset), [weekOffset]);
+    const weekStart = useMemo(() => startOfWeek(currentWeekDate, { weekStartsOn: 1 }), [currentWeekDate]);
+    const weekEnd = useMemo(() => endOfWeek(currentWeekDate, { weekStartsOn: 1 }), [currentWeekDate]);
+
+    const weekTransactions = useMemo(() => {
+        return transactions.filter(t => {
+            const d = parseISO(t.date);
+            return isWithinInterval(d, { start: weekStart, end: weekEnd });
+        });
+    }, [transactions, weekStart, weekEnd]);
+
+    const summary = useMemo(() => {
+        let income = 0, expense = 0;
+        for (const t of weekTransactions) {
+            if (t.type === "income") income += t.amount;
+            else expense += t.amount;
+        }
+        return {
+            income,
+            expense,
+            net: income - expense,
+            dailyAvgExpense: expense / 7,
+        };
+    }, [weekTransactions]);
+
+    const dailyBreakdown = useMemo(() => {
+        const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+        const config: ChartConfig = {
+            income: { label: "Income", color: pieColors[0] },
+            expense: { label: "Expense", color: pieColors[1] },
+        };
+
+        const data = days.map(day => {
+            const dayStr = format(day, "yyyy-MM-dd");
+            let income = 0, expense = 0;
+            for (const t of weekTransactions) {
+                if (t.date === dayStr) {
+                    if (t.type === "income") income += t.amount;
+                    else expense += t.amount;
+                }
+            }
+            return {
+                day: format(day, "EEE"),
+                fullDate: format(day, "MMM d"),
+                income,
+                expense,
+            };
+        });
+
+        return { data, config };
+    }, [weekTransactions, weekStart, weekEnd, pieColors]);
+
+    return (
+        <div className="flex flex-col gap-6">
+            {/* Week Navigator */}
+            <div className="flex items-center justify-center gap-3">
+                <Button variant="outline" size="icon" className="size-8" onClick={() => setWeekOffset(o => o + 1)}>
+                    <ChevronLeftIcon className="size-4" />
+                </Button>
+                <span className="text-sm font-semibold min-w-[200px] text-center">
+                    {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
+                </span>
+                <Button variant="outline" size="icon" className="size-8" onClick={() => setWeekOffset(o => Math.max(0, o - 1))} disabled={weekOffset === 0}>
+                    <ChevronRightIcon className="size-4" />
+                </Button>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Income</p>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(summary.income)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Expense</p>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatCurrency(summary.expense)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Net</p>
+                    <p className={`text-lg font-bold ${summary.net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(summary.net)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Avg/Day</p>
+                    <p className="text-lg font-bold">{formatCurrency(summary.dailyAvgExpense)}</p>
+                </div>
+            </div>
+
+            {/* Daily breakdown bar chart */}
+            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3">Daily Breakdown</h3>
+                <ChartContainer config={dailyBreakdown.config} className="aspect-auto h-[250px] w-full">
+                    <BarChart data={dailyBreakdown.data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                        <CartesianGrid vertical={false} />
+                        <XAxis dataKey="day" tickLine={false} axisLine={false} />
+                        <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                        <ChartTooltip
+                            content={
+                                <ChartTooltipContent
+                                    labelFormatter={(_v: string, payload: Array<{ payload?: { fullDate?: string } }>) => payload?.[0]?.payload?.fullDate ?? _v}
+                                    formatter={(value, name) => (
+                                        <span>
+                                            {dailyBreakdown.config[name as string]?.label}: {formatCurrency(value as number)}
+                                        </span>
+                                    )}
+                                />
+                            }
+                        />
+                        <ChartLegend content={<ChartLegendContent />} />
+                        <Bar dataKey="income" fill="var(--color-income)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="expense" fill="var(--color-expense)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ChartContainer>
+            </section>
+
+            {/* Category breakdown for the week */}
+            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3">Expense Categories This Week</h3>
+                <CategoryPieChart transactions={weekTransactions} type="expense" pieColors={pieColors} />
+            </section>
+
+            <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                <h3 className="text-sm font-semibold mb-3">Expense Ranking This Week</h3>
+                <CategoryRanking transactions={weekTransactions} type="expense" pieColors={pieColors} />
+            </section>
+        </div>
+    );
+}
+
 // --- Color Palette Selector ---
 function PaletteSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
     return (
@@ -466,7 +802,7 @@ function PaletteSelector({ value, onChange }: { value: string; onChange: (v: str
 // --- Main Analytics Component ---
 const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
     const [period, setPeriod] = useState("6");
-    const [analyticsTab, setAnalyticsTab] = useState("overall");
+    const [analyticsTab, setAnalyticsTab] = useState("weekly");
     const [paletteKey, setPaletteKey] = useLocalStorage("analytics-palette", "default");
 
     const pieColors = PIE_COLOR_PALETTES[paletteKey]?.colors ?? PIE_COLOR_PALETTES.default.colors;
@@ -514,13 +850,30 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
             {/* Sub-tabs */}
             <Tabs value={analyticsTab} onValueChange={setAnalyticsTab}>
                 <TabsList>
+                    <TabsTrigger value="weekly">Weekly</TabsTrigger>
+                    <TabsTrigger value="monthly">Monthly</TabsTrigger>
                     <TabsTrigger value="overall">Overall</TabsTrigger>
                     <TabsTrigger value="income">Income</TabsTrigger>
                     <TabsTrigger value="expense">Expense</TabsTrigger>
                 </TabsList>
 
+                {/* --- Weekly Tab --- */}
+                <TabsContent value="weekly" className="flex flex-col gap-6">
+                    <WeekTracker transactions={transactions} pieColors={pieColors} />
+                </TabsContent>
+
+                {/* --- Monthly Tab --- */}
+                <TabsContent value="monthly" className="flex flex-col gap-6">
+                    <MonthTracker transactions={transactions} pieColors={pieColors} />
+                </TabsContent>
+
                 {/* --- Overall Tab --- */}
                 <TabsContent value="overall" className="flex flex-col gap-6">
+                    <section className="border border-dashed rounded-lg p-4 bg-muted/30">
+                        <h3 className="text-sm font-semibold mb-3">Weekly Income vs Expense</h3>
+                        <WeeklyBarChart transactions={filtered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />
+                    </section>
+
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Monthly Income vs Expense</h3>
                         <MonthlyBarChart transactions={filtered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />

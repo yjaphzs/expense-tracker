@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { format, parseISO, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subYears, isWithinInterval } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subYears, isWithinInterval, startOfWeek, endOfWeek, eachWeekOfInterval } from "date-fns";
 import XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import {
@@ -267,11 +267,164 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
             }
         }
 
+        // --- Weekly breakdown sheet ---
+        const weeklyMap = new Map<string, { weekLabel: string; income: number; expense: number }>();
+        for (const t of filtered) {
+            const d = parseISO(t.date);
+            const ws = startOfWeek(d, { weekStartsOn: 1 });
+            const we = endOfWeek(d, { weekStartsOn: 1 });
+            const key = format(ws, "yyyy-MM-dd");
+            if (!weeklyMap.has(key)) {
+                weeklyMap.set(key, {
+                    weekLabel: `${format(ws, "MMM d")} – ${format(we, "MMM d, yyyy")}`,
+                    income: 0,
+                    expense: 0,
+                });
+            }
+            const entry = weeklyMap.get(key)!;
+            if (t.type === "income") entry.income += t.amount;
+            else entry.expense += t.amount;
+        }
+
+        const weeklyRows = Array.from(weeklyMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, data]) => ({
+                Week: data.weekLabel,
+                Income: data.income,
+                Expenses: data.expense,
+                Net: data.income - data.expense,
+                "Avg/Day": data.expense / 7,
+            }));
+
+        const wsWeekly = XLSX.utils.json_to_sheet(weeklyRows);
+        wsWeekly["!cols"] = [{ wch: 28 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+
+        for (const ref of ["A1", "B1", "C1", "D1", "E1"]) {
+            if (wsWeekly[ref]) wsWeekly[ref].s = headerStyle;
+        }
+
+        for (let i = 0; i < weeklyRows.length; i++) {
+            const row = i + 2;
+            const net = weeklyRows[i].Net;
+
+            if (wsWeekly[`A${row}`]) wsWeekly[`A${row}`].s = { font: { bold: true } };
+            if (wsWeekly[`B${row}`]) {
+                wsWeekly[`B${row}`].s = { font: { color: { rgb: colors.income } }, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                wsWeekly[`B${row}`].z = currencyFmt;
+            }
+            if (wsWeekly[`C${row}`]) {
+                wsWeekly[`C${row}`].s = { font: { color: { rgb: colors.expense } }, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                wsWeekly[`C${row}`].z = currencyFmt;
+            }
+            if (wsWeekly[`D${row}`]) {
+                wsWeekly[`D${row}`].s = {
+                    font: { bold: true, color: { rgb: net >= 0 ? colors.netPositive : colors.netNegative } },
+                    numFmt: currencyFmt,
+                    alignment: { horizontal: "right" as const },
+                };
+                wsWeekly[`D${row}`].z = currencyFmt;
+            }
+            if (wsWeekly[`E${row}`]) {
+                wsWeekly[`E${row}`].s = { font: { color: { rgb: colors.muted } }, numFmt: currencyFmt, alignment: { horizontal: "right" as const } };
+                wsWeekly[`E${row}`].z = currencyFmt;
+            }
+        }
+
+        // --- Monthly Detail sheet (with weekly subtotals per month) ---
+        const monthDetailRows: { Label: string; Income: number | string; Expenses: number | string; Net: number | string; _isMonth?: boolean; _isWeek?: boolean }[] = [];
+        const sortedMonths = Array.from(monthlyMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+        for (const [monthKey, mData] of sortedMonths) {
+            const monthDate = parseISO(`${monthKey}-01`);
+            monthDetailRows.push({
+                Label: format(monthDate, "MMMM yyyy"),
+                Income: mData.income,
+                Expenses: mData.expense,
+                Net: mData.income - mData.expense,
+                _isMonth: true,
+            });
+
+            const mStart = startOfMonth(monthDate);
+            const mEnd = endOfMonth(monthDate);
+            const weeks = eachWeekOfInterval({ start: mStart, end: mEnd }, { weekStartsOn: 1 });
+
+            for (const ws of weeks) {
+                const we = endOfWeek(ws, { weekStartsOn: 1 });
+                const effectiveStart = ws < mStart ? mStart : ws;
+                const effectiveEnd = we > mEnd ? mEnd : we;
+
+                let wIncome = 0, wExpense = 0;
+                for (const t of filtered) {
+                    const d = parseISO(t.date);
+                    if (isWithinInterval(d, { start: effectiveStart, end: effectiveEnd })) {
+                        if (t.type === "income") wIncome += t.amount;
+                        else wExpense += t.amount;
+                    }
+                }
+
+                monthDetailRows.push({
+                    Label: `  ${format(effectiveStart, "MMM d")} – ${format(effectiveEnd, "MMM d")}`,
+                    Income: wIncome,
+                    Expenses: wExpense,
+                    Net: wIncome - wExpense,
+                    _isWeek: true,
+                });
+            }
+        }
+
+        const wsMonthDetail = XLSX.utils.json_to_sheet(
+            monthDetailRows.map(({ _isMonth, _isWeek, ...rest }) => rest)
+        );
+        wsMonthDetail["!cols"] = [{ wch: 28 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+
+        for (const ref of ["A1", "B1", "C1", "D1"]) {
+            if (wsMonthDetail[ref]) wsMonthDetail[ref].s = headerStyle;
+        }
+
+        for (let i = 0; i < monthDetailRows.length; i++) {
+            const row = i + 2;
+            const r = monthDetailRows[i];
+            const net = typeof r.Net === "number" ? r.Net : 0;
+
+            if (r._isMonth) {
+                if (wsMonthDetail[`A${row}`]) wsMonthDetail[`A${row}`].s = { font: { bold: true, color: { rgb: colors.primary }, sz: 11 } };
+            } else if (r._isWeek) {
+                if (wsMonthDetail[`A${row}`]) wsMonthDetail[`A${row}`].s = { font: { color: { rgb: colors.muted }, sz: 10 } };
+            }
+
+            if (typeof r.Income === "number" && wsMonthDetail[`B${row}`]) {
+                wsMonthDetail[`B${row}`].s = {
+                    font: { color: { rgb: colors.income }, ...(r._isMonth ? { bold: true } : {}) },
+                    numFmt: currencyFmt,
+                    alignment: { horizontal: "right" as const },
+                };
+                wsMonthDetail[`B${row}`].z = currencyFmt;
+            }
+            if (typeof r.Expenses === "number" && wsMonthDetail[`C${row}`]) {
+                wsMonthDetail[`C${row}`].s = {
+                    font: { color: { rgb: colors.expense }, ...(r._isMonth ? { bold: true } : {}) },
+                    numFmt: currencyFmt,
+                    alignment: { horizontal: "right" as const },
+                };
+                wsMonthDetail[`C${row}`].z = currencyFmt;
+            }
+            if (typeof r.Net === "number" && wsMonthDetail[`D${row}`]) {
+                wsMonthDetail[`D${row}`].s = {
+                    font: { bold: r._isMonth ?? false, color: { rgb: net >= 0 ? colors.netPositive : colors.netNegative } },
+                    numFmt: currencyFmt,
+                    alignment: { horizontal: "right" as const },
+                };
+                wsMonthDetail[`D${row}`].z = currencyFmt;
+            }
+        }
+
         // --- Build workbook ---
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, wsTx, "Transactions");
         XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+        XLSX.utils.book_append_sheet(wb, wsWeekly, "Weekly Breakdown");
         XLSX.utils.book_append_sheet(wb, wsMonthly, "Monthly Breakdown");
+        XLSX.utils.book_append_sheet(wb, wsMonthDetail, "Monthly Detail");
 
         // Generate filename
         const rangeLabel = RANGE_OPTIONS.find((o) => o.value === range)?.label ?? range;
