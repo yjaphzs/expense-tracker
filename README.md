@@ -1,6 +1,3 @@
-<!-- TODO: Add banner image -->
-<!-- <img width="6336" height="1584" alt="Github_Banner - Repository" src="" /> -->
-
 # Expense Tracker
 
 A personal finance tracker for income and expenses across multiple wallets — with categories, recurring transactions, analytics, and Excel export. Built with **Next.js** (App Router), **Firebase**, and styled using **shadcn/ui** components.
@@ -121,10 +118,6 @@ Set the custom domain (`expense-tracker.yjaphzs.xyz`) under Firebase Hosting →
 
 - **QR Transfer:**  
   [qrcode.react](https://github.com/zpao/qrcode.react), [html5-qrcode](https://github.com/mebjas/html5-qrcode), [lz-string](https://github.com/pieroxy/lz-string)
-
-## Screenshots
-
-<!-- TODO: Add screenshots -->
 
 ## MIT License
 

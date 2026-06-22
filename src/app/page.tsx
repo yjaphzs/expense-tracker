@@ -37,7 +37,7 @@ import DataToolbar from "@/components/smart/data-toolbar";
 import Analytics from "@/components/smart/analytics";
 import ExcelExport from "@/components/smart/excel-export";
 import { MergeDialog } from "@/components/smart/merge-dialog";
-import { LoadingScreen } from "@/components/loading-screen";
+import { TrackerSkeleton } from "@/components/smart/tracker-skeleton";
 import { useExpenseData } from "@/hooks/use-expense-data";
 import { useTransactionLogic } from "@/hooks/use-transactions";
 import { useWalletLogic } from "@/hooks/use-wallets";
@@ -241,15 +241,14 @@ export default function Home() {
         toast.success("All data has been reset.");
     };
 
-    if (loading) {
-        return <LoadingScreen message="Loading your data…" />;
-    }
-
     return (
         <div className="flex min-h-svh flex-col">
             <SiteHeader />
             <main className="w-full flex-1">
                 <div className="mx-auto w-full max-w-3xl px-4 py-6">
+                    {loading ? (
+                    <TrackerSkeleton />
+                    ) : (
                     <Tabs value={tab} onValueChange={onTabChange}>
                         {wallets.length > 0 && (
                             <TabsList className="mt-2">
@@ -482,6 +481,7 @@ export default function Home() {
                             </div>
                         </TabsContent>
                     </Tabs>
+                    )}
                 </div>
             </main>
 
