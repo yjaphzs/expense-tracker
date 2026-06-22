@@ -1,5 +1,5 @@
-import React from "react";
-import ExpenseTracker from "@/assets/images/expense-tracker.jpg";
+import Image from "next/image";
+import ExpenseTrackerLogo from "@/assets/images/expense-tracker.jpg";
 
 interface AppHeaderProps {
     appName: string;
@@ -10,18 +10,20 @@ const AppHeader: React.FC<AppHeaderProps> = ({ appName, appVersion }) => (
     <div className="flex flex-row gap-2 items-center">
         <a href="https://www.yjaphzs.xyz/" target="_blank" rel="noopener noreferrer">
             <div className="bg-primary-foreground rounded-md overflow-hidden flex items-center self-start h-8 w-8">
-                <img
-                    src={ExpenseTracker}
+                <Image
+                    src={ExpenseTrackerLogo}
                     alt="Expense Tracker Logo"
-                    className="object-cover"
+                    width={32}
+                    height={32}
+                    className="size-full object-cover"
+                    priority
                 />
             </div>
         </a>
-        <div className="flex flex-col text-left">
-            <h1 className="scroll-m-20 text-2xl font-extrabold tracking-tight text-balance m-0 p-0">
-                {appName} <span className="text-xs font-mono font-light">v{appVersion}</span>
+        <div className="flex flex-col text-left min-w-0">
+            <h1 className="scroll-m-20 text-lg sm:text-xl font-extrabold tracking-tight m-0 p-0 truncate">
+                {appName} <span className="text-xs font-mono font-light text-muted-foreground">v{appVersion}</span>
             </h1>
-            
         </div>
     </div>
 );

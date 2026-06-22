@@ -1,26 +1,37 @@
-import { useMemo } from "react";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useCallback, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { Wallet, Transaction } from "@/types/transaction";
-import { DEFAULT_WALLETS } from "@/types/transaction";
 
-export function useWallets(transactions: Transaction[], storageKey = "expense-tracker-wallets", autosave = true) {
-  const [wallets, setWallets, removeWallets] = useLocalStorage<Wallet[]>(
-    storageKey,
-    DEFAULT_WALLETS,
-    { enabled: autosave }
+/**
+ * Derived wallet helpers over lifted state. The state itself lives in
+ * `useExpenseData`; this hook provides the add/remove logic and the per-wallet
+ * balance map.
+ */
+export function useWalletLogic(
+  wallets: Wallet[],
+  setWallets: Dispatch<SetStateAction<Wallet[]>>,
+  transactions: Transaction[],
+) {
+  const addWallet = useCallback(
+    (name: string, type: Wallet["type"]) => {
+      const id = crypto.randomUUID();
+      setWallets((prev) => [...prev, { id, name: name.trim(), type }]);
+    },
+    [setWallets],
   );
 
-  const addWallet = (name: string, type: Wallet["type"]) => {
-    const id = crypto.randomUUID();
-    setWallets((prev) => [...prev, { id, name: name.trim(), type }]);
-  };
-
-  const removeWallet = (id: string) => {
-    setWallets((prev) => prev.filter((w) => w.id !== id));
-  };
+  const removeWallet = useCallback(
+    (id: string) => {
+      setWallets((prev) => prev.filter((w) => w.id !== id));
+    },
+    [setWallets],
+  );
 
   const walletBalances = useMemo(() => {
-    const map: Record<string, { income: number; expenses: number; balance: number }> = {};
+    const map: Record<
+      string,
+      { income: number; expenses: number; balance: number }
+    > = {};
     for (const w of wallets) {
       map[w.id] = { income: 0, expenses: 0, balance: 0 };
     }
@@ -40,9 +51,6 @@ export function useWallets(transactions: Transaction[], storageKey = "expense-tr
   }, [wallets, transactions]);
 
   return {
-    wallets,
-    setWallets,
-    removeWallets,
     addWallet,
     removeWallet,
     walletBalances,

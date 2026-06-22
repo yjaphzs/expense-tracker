@@ -1,33 +1,42 @@
 import { useCallback, useMemo } from "react";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import type { Dispatch, SetStateAction } from "react";
 import type { Transaction, TransactionType } from "@/types/transaction";
 
-export function useTransactions(storageKey = "expense-tracker-transactions", autosave = true) {
-  const [transactions, setTransactions, removeTransactions] = useLocalStorage<Transaction[]>(
-    storageKey,
-    [],
-    { enabled: autosave }
+/**
+ * Derived transaction helpers over lifted state. The state itself lives in
+ * `useExpenseData` (guest localStorage or signed-in cloud); this hook only
+ * provides the mutation + selector logic.
+ */
+export function useTransactionLogic(
+  transactions: Transaction[],
+  setTransactions: Dispatch<SetStateAction<Transaction[]>>,
+) {
+  const addTransaction = useCallback(
+    (data: Omit<Transaction, "id">) => {
+      const newTransaction: Transaction = {
+        ...data,
+        id: crypto.randomUUID(),
+      };
+      setTransactions((prev) => [newTransaction, ...prev]);
+    },
+    [setTransactions],
   );
 
-  const addTransaction = useCallback((
-    data: Omit<Transaction, "id">
-  ) => {
-    const newTransaction: Transaction = {
-      ...data,
-      id: crypto.randomUUID(),
-    };
-    setTransactions((prev) => [newTransaction, ...prev]);
-  }, [setTransactions]);
+  const removeTransaction = useCallback(
+    (id: string) => {
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    },
+    [setTransactions],
+  );
 
-  const removeTransaction = useCallback((id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-  }, [setTransactions]);
-
-  const editTransaction = useCallback((id: string, data: Omit<Transaction, "id">) => {
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...data, id } : t))
-    );
-  }, [setTransactions]);
+  const editTransaction = useCallback(
+    (id: string, data: Omit<Transaction, "id">) => {
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...data, id } : t)),
+      );
+    },
+    [setTransactions],
+  );
 
   const summary = useMemo(() => {
     const income = transactions
@@ -43,15 +52,15 @@ export function useTransactions(storageKey = "expense-tracker-transactions", aut
     };
   }, [transactions]);
 
-  const getFilteredTransactions = (type?: TransactionType) => {
-    if (!type) return transactions;
-    return transactions.filter((t) => t.type === type);
-  };
+  const getFilteredTransactions = useCallback(
+    (type?: TransactionType) => {
+      if (!type) return transactions;
+      return transactions.filter((t) => t.type === type);
+    },
+    [transactions],
+  );
 
   return {
-    transactions,
-    setTransactions,
-    removeTransactions,
     addTransaction,
     removeTransaction,
     editTransaction,
