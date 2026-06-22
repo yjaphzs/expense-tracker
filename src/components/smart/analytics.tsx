@@ -40,6 +40,7 @@ import {
 import { BarChart3Icon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Transaction, Wallet } from "@/types/transaction";
+import { isTransfer } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { getCategoryIcon } from "@/lib/category-icons";
@@ -809,6 +810,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
 
     const filtered = useMemo(() => filterByPeriod(transactions, period), [transactions, period]);
 
+    // Income/expense views exclude wallet-to-wallet transfers (they aren't real
+    // income or spending). `filtered` (transfers included) is kept only for the
+    // Wallet Balance Comparison, so balances still reflect the money that moved.
+    const reportTx = useMemo(() => transactions.filter((t) => !isTransfer(t)), [transactions]);
+    const reportFiltered = useMemo(() => filterByPeriod(reportTx, period), [reportTx, period]);
+
     if (transactions.length === 0) {
         return (
             <Empty className="border border-dashed mt-4">
@@ -859,39 +866,39 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
 
                 {/* --- Weekly Tab --- */}
                 <TabsContent value="weekly" className="flex flex-col gap-6">
-                    <WeekTracker transactions={transactions} pieColors={pieColors} />
+                    <WeekTracker transactions={reportTx} pieColors={pieColors} />
                 </TabsContent>
 
                 {/* --- Monthly Tab --- */}
                 <TabsContent value="monthly" className="flex flex-col gap-6">
-                    <MonthTracker transactions={transactions} pieColors={pieColors} />
+                    <MonthTracker transactions={reportTx} pieColors={pieColors} />
                 </TabsContent>
 
                 {/* --- Overall Tab --- */}
                 <TabsContent value="overall" className="flex flex-col gap-6">
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Weekly Income vs Expense</h3>
-                        <WeeklyBarChart transactions={filtered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />
+                        <WeeklyBarChart transactions={reportFiltered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />
                     </section>
 
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Monthly Income vs Expense</h3>
-                        <MonthlyBarChart transactions={filtered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />
+                        <MonthlyBarChart transactions={reportFiltered} incomeColor={pieColors[0]} expenseColor={pieColors[1]} />
                     </section>
 
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Expense Category Breakdown</h3>
-                        <CategoryPieChart transactions={filtered} type="expense" pieColors={pieColors} />
+                        <CategoryPieChart transactions={reportFiltered} type="expense" pieColors={pieColors} />
                     </section>
 
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Income Category Breakdown</h3>
-                        <CategoryPieChart transactions={filtered} type="income" pieColors={pieColors} />
+                        <CategoryPieChart transactions={reportFiltered} type="income" pieColors={pieColors} />
                     </section>
 
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Cumulative Cash Flow</h3>
-                        <DailyCashFlowChart transactions={filtered} color={pieColors[4 % pieColors.length]} />
+                        <DailyCashFlowChart transactions={reportFiltered} color={pieColors[4 % pieColors.length]} />
                     </section>
 
                     {wallets.length >= 2 && (
@@ -906,12 +913,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
                 <TabsContent value="income" className="flex flex-col gap-6">
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Income Category Breakdown</h3>
-                        <CategoryPieChart transactions={filtered} type="income" pieColors={pieColors} />
+                        <CategoryPieChart transactions={reportFiltered} type="income" pieColors={pieColors} />
                     </section>
 
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Income Ranking by Category</h3>
-                        <CategoryRanking transactions={filtered} type="income" pieColors={pieColors} />
+                        <CategoryRanking transactions={reportFiltered} type="income" pieColors={pieColors} />
                     </section>
                 </TabsContent>
 
@@ -919,12 +926,12 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
                 <TabsContent value="expense" className="flex flex-col gap-6">
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Expense Category Breakdown</h3>
-                        <CategoryPieChart transactions={filtered} type="expense" pieColors={pieColors} />
+                        <CategoryPieChart transactions={reportFiltered} type="expense" pieColors={pieColors} />
                     </section>
 
                     <section className="border border-dashed rounded-lg p-4 bg-muted/30">
                         <h3 className="text-sm font-semibold mb-3">Expense Ranking by Category</h3>
-                        <CategoryRanking transactions={filtered} type="expense" pieColors={pieColors} />
+                        <CategoryRanking transactions={reportFiltered} type="expense" pieColors={pieColors} />
                     </section>
                 </TabsContent>
             </Tabs>

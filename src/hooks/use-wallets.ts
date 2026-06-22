@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Wallet, Transaction } from "@/types/transaction";
+import { isTransfer } from "@/types/transaction";
 
 /**
  * Derived wallet helpers over lifted state. The state itself lives in
@@ -39,12 +40,16 @@ export function useWalletLogic(
       if (!map[t.walletId]) {
         map[t.walletId] = { income: 0, expenses: 0, balance: 0 };
       }
+      // Balance always reflects the movement (transfers really move money
+      // between wallets). The income/expenses indicators exclude transfer legs,
+      // since a transfer isn't this wallet's income or spending.
+      const transfer = isTransfer(t);
       if (t.type === "income") {
-        map[t.walletId].income += t.amount;
         map[t.walletId].balance += t.amount;
+        if (!transfer) map[t.walletId].income += t.amount;
       } else {
-        map[t.walletId].expenses += t.amount;
         map[t.walletId].balance -= t.amount;
+        if (!transfer) map[t.walletId].expenses += t.amount;
       }
     }
     return map;
