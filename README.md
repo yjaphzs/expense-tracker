@@ -3,16 +3,18 @@
 
 # Expense Tracker
 
-A personal finance tracker built with **ReactJS** and styled using **shadcn/ui** components. Track your income and expenses across multiple wallets — all data is stored locally in your browser.
+A personal finance tracker for income and expenses across multiple wallets — with categories, recurring transactions, analytics, and Excel export. Built with **Next.js** (App Router), **Firebase**, and styled using **shadcn/ui** components.
 
-![React](https://img.shields.io/badge/Made%20with-React-61DAFB?style=flat&logo=react&logoColor=black)
+The tracker is fully usable **without an account** (data is kept in your browser). Sign in to **save your data and sync it across devices**.
+
+![Next.js](https://img.shields.io/badge/Made%20with-Next.js-000000?style=flat&logo=nextdotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/Made%20with-TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Made%20with-Vite-646CFF?style=flat&logo=vite&logoColor=white)
+![Firebase](https://img.shields.io/badge/Made%20with-Firebase-FFCA28?style=flat&logo=firebase&logoColor=black)
 ![TailwindCSS](https://img.shields.io/badge/Made%20with-TailwindCSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
 ![shadcn/ui](https://img.shields.io/badge/Made%20with-shadcn/ui-111827?style=flat)
 
 **Live Demo:**  
-[https://yjaphzs.github.io/expense-tracker/](https://yjaphzs.github.io/expense-tracker/)
+[https://expense-tracker.yjaphzs.xyz](https://expense-tracker.yjaphzs.xyz)
 
 ## Features
 
@@ -20,64 +22,99 @@ A personal finance tracker built with **ReactJS** and styled using **shadcn/ui**
 - Edit and delete transactions with confirmation dialogs
 - Multiple wallets (Cash, E-Wallet/Card) with per-wallet balance tracking
 - Wallet-to-wallet fund transfers
-- Recurring transactions (daily, weekly, biweekly, monthly) with auto-processing
-- Edit, pause, and resume recurring transactions
-- Analytics with sub-tabs (Overall, Income, Expense) and category rankings
-- Interactive charts: bar, donut, area, and wallet comparison
-- 6 customizable color palettes for all charts
-- Styled Excel export with date range presets
-- QR code transfer between devices (no server needed)
-- JSON import/export with full validation
-- Autosave to local storage
+- Recurring transactions (daily, weekly, biweekly, monthly) with auto-processing, pause, and resume
+- Analytics with sub-tabs (Overall, Income, Expense), category rankings, and interactive charts
+- Styled Excel export with date-range presets
+- QR code transfer between devices, plus JSON import/export with full validation
 - Responsive design with dark mode support
-- Installable as a Progressive Web App (PWA)
+- **Guest mode** — autosave to local storage, no account required
+- **Optional accounts** — email/password + Google sign-in, password reset, email verification, profile photo, and live cross-device sync via Firestore
+- In-app **"What's new"** changelog, Terms & Conditions, and Privacy Policy
+
+## Tech stack
+
+- **Next.js** App Router, exported as a static site (`output: 'export'`)
+- **Firebase**: Hosting, Authentication, Firestore, Storage, and Cloud Functions
+  (`deleteAccount`, `sendVerificationEmail`, `sendPasswordResetEmail`)
+- **Tailwind CSS v4** + **shadcn/ui**, Recharts (analytics), xlsx-js-style (export)
 
 ## Getting Started
 
-1. **Clone the repository:**
-   ```
+1. **Clone and install:**
+   ```bash
    git clone https://github.com/yjaphzs/expense-tracker.git
    cd expense-tracker
-   ```
-
-2. **Install dependencies:**
-   ```
    npm install
    ```
 
-3. **Run the development server:**
+2. **Create a Firebase project** and a Web App in the [Firebase Console](https://console.firebase.google.com/), then enable:
+   - **Authentication** → Sign-in methods: **Email/Password** and **Google**
+   - **Firestore Database**
+   - **Storage**
+   - (optional) **App Check** with reCAPTCHA v3
+
+3. **Configure environment variables:**
+   ```bash
+   cp .env.local.example .env.local
+   # fill in the NEXT_PUBLIC_FIREBASE_* values from your Web App config
    ```
+
+4. **Configure the email sender (Cloud Functions + Resend).** Auth emails
+   (verification + password reset) are sent as branded HTML by Cloud Functions
+   via [Resend](https://resend.com/docs/send-with-nodejs) — the functions
+   generate the action link and rewrite it to the in-app `/auth/action` handler,
+   so you don't need to customize the Firebase console action URL. Setup:
+   add your domain in Resend, add the DKIM/SPF records it shows you, then create
+   an API key. For local emulator testing:
+   ```bash
+   cp functions/.env.example functions/.env
+   # fill in RESEND_API_KEY, EMAIL_FROM_EMAIL (e.g. no-reply@yjaphzs.xyz), APP_URL
+   ```
+   The email HTML is built from the `.hbs` sources in
+   `functions/src/lib/email/templates/` via `npm run generate:emails` (mailwind
+   inlines the styles into the committed `generated-templates.ts`).
+
+5. **Run the dev server:**
+   ```bash
    npm run dev
    ```
 
-4. **Build for production:**
-   ```
-   npm run build
+6. **Build the static export (production):**
+   ```bash
+   npm run build   # outputs ./out
    ```
 
-5. **Preview the production build:**
-   ```
-   npm run preview
-   ```
+## Local Firebase emulators (optional)
+
+```bash
+npm install -g firebase-tools
+firebase emulators:start   # Auth, Firestore, Storage, Functions, Hosting
+```
 
 ## Deployment
 
-This app is ready to deploy to GitHub Pages.  
-See the [workflow file](.github/workflows/main.yml) for automated deployment instructions.
+Pushing to **`main`** triggers [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which
+lint + typechecks, builds the static export, and deploys **Functions → Hosting → Firestore rules →
+Storage rules** to the single Firebase project. Pushes to `development` run lint + typecheck only.
+
+Required GitHub repository configuration:
+
+- **Variables** (`Settings → Secrets and variables → Actions → Variables`): every `NEXT_PUBLIC_*`
+  value (app + Firebase). `NEXT_PUBLIC_FIREBASE_PROJECT_ID` also selects the deploy target.
+  For email: `EMAIL_FROM_NAME`, `EMAIL_FROM_EMAIL`.
+- **Secrets** (`… → Secrets`): `GOOGLE_APPLICATION_CREDENTIALS_BASE64` (a base64-encoded Firebase
+  service-account JSON key with deploy permissions), plus `RESEND_API_KEY` for the email sender.
+  The workflow writes these into `functions/.env` at deploy time.
+
+Set the custom domain (`expense-tracker.yjaphzs.xyz`) under Firebase Hosting → Custom domains.
 
 ## References
 
 - **Ko-fi Button:**  
   [CostasAK/react-kofi-button](https://github.com/CostasAK/react-kofi-button)
 
-- **UI Components & Hooks:**  
-  [shadcn/ui](https://ui.shadcn.com/)
-
-- **Theme Switcher:**  
-  [shadcnuikit](https://shadcnuikit.com/)
-
-- **Charts:**  
-  [Recharts](https://recharts.org/)
+- **UI Components, Charts & Hooks:**  
+  [shadcn/ui](https://ui.shadcn.com/), [Recharts](https://recharts.org/)
 
 - **Excel Export:**  
   [xlsx-js-style](https://github.com/gitbrent/xlsx-js-style)
@@ -91,4 +128,4 @@ See the [workflow file](.github/workflows/main.yml) for automated deployment ins
 
 ## MIT License
 
-Made with ❤️ using React and shadcn/ui.
+Made with ❤️ using Next.js and shadcn/ui.

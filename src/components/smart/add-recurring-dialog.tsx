@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogClose,
@@ -74,6 +74,18 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  const resetForm = useCallback(() => {
+    setType("expense");
+    setCategory("");
+    setAmount("");
+    setDescription("");
+    setFrequency("monthly");
+    setWalletId(wallets[0]?.id ?? "");
+    setStartDate(new Date());
+    setCalendarMonth(new Date());
+    setCalendarOpen(false);
+  }, [wallets]);
+
   useEffect(() => {
     if (open && editingRecurring) {
       setType(editingRecurring.type);
@@ -88,22 +100,10 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
     } else if (open) {
       resetForm();
     }
-  }, [open, editingRecurring]);
+  }, [open, editingRecurring, resetForm]);
 
   const categories =
     type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-
-  const resetForm = () => {
-    setType("expense");
-    setCategory("");
-    setAmount("");
-    setDescription("");
-    setFrequency("monthly");
-    setWalletId(wallets[0]?.id ?? "");
-    setStartDate(new Date());
-    setCalendarMonth(new Date());
-    setCalendarOpen(false);
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
