@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowRightIcon, BanknoteIcon, CreditCardIcon } from "lucide-react";
 import type { Wallet, Transaction } from "@/types/transaction";
+import { TRANSFER_CATEGORY } from "@/types/transaction";
 
 interface TransferDialogProps {
   open: boolean;
@@ -59,19 +60,21 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
     onTransfer(
       {
         type: "expense",
-        category: "Transfer",
+        category: TRANSFER_CATEGORY,
         amount: parsedAmount,
         description: desc,
         date: dateStr,
         walletId: fromWalletId,
+        transfer: true,
       },
       {
         type: "income",
-        category: "Transfer",
+        category: TRANSFER_CATEGORY,
         amount: parsedAmount,
         description: desc,
         date: dateStr,
         walletId: toWalletId,
+        transfer: true,
       }
     );
     resetForm();

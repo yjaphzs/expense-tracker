@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { FileSpreadsheetIcon, DownloadIcon } from "lucide-react";
 import type { Transaction, Wallet } from "@/types/transaction";
+import { isTransfer } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -67,7 +68,12 @@ function filterTransactions(transactions: Transaction[], preset: RangePreset): T
 const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
     const [range, setRange] = useState<RangePreset>("this-month");
 
-    const filtered = useMemo(() => filterTransactions(transactions, range), [transactions, range]);
+    // Exclude wallet-to-wallet transfers — the export is an income/expense
+    // report, and transfers are just money moving between your own wallets.
+    const filtered = useMemo(
+        () => filterTransactions(transactions, range).filter((t) => !isTransfer(t)),
+        [transactions, range],
+    );
 
     const walletMap = useMemo(() => {
         const map = new Map<string, string>();

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Transaction, TransactionType } from "@/types/transaction";
+import { isTransfer } from "@/types/transaction";
 
 /**
  * Derived transaction helpers over lifted state. The state itself lives in
@@ -39,11 +40,13 @@ export function useTransactionLogic(
   );
 
   const summary = useMemo(() => {
+    // Transfers move money between your own wallets — they aren't income or
+    // spending, so they're excluded from these totals.
     const income = transactions
-      .filter((t) => t.type === "income")
+      .filter((t) => t.type === "income" && !isTransfer(t))
       .reduce((sum, t) => sum + t.amount, 0);
     const expenses = transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isTransfer(t))
       .reduce((sum, t) => sum + t.amount, 0);
     return {
       income,
@@ -54,8 +57,10 @@ export function useTransactionLogic(
 
   const getFilteredTransactions = useCallback(
     (type?: TransactionType) => {
+      // No type → the full list (Home "Recent Transactions" shows transfers too,
+      // styled neutrally). The Income/Expense tabs exclude transfer legs.
       if (!type) return transactions;
-      return transactions.filter((t) => t.type === type);
+      return transactions.filter((t) => t.type === type && !isTransfer(t));
     },
     [transactions],
   );

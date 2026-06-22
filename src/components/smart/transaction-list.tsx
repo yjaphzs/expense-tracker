@@ -24,9 +24,11 @@ import {
   Trash2Icon,
   WalletIcon,
   PencilIcon,
+  ArrowLeftRightIcon,
 } from "lucide-react";
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { Transaction, Wallet } from "@/types/transaction";
+import { isTransfer } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils";
 import Paginator from "@/components/smart/paginator";
 import {
@@ -144,19 +146,25 @@ const TransactionList: React.FC<TransactionListProps> = ({
             {formatDate(date)}
           </div>
           <div className="flex flex-col gap-2">
-            {grouped[date].map((t) => (
+            {grouped[date].map((t) => {
+              const transfer = isTransfer(t);
+              return (
               <div
                 key={t.id}
                 className="flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
               >
                 <div
                   className={`flex items-center justify-center size-9 rounded-full shrink-0 ${
-                    t.type === "income"
+                    transfer
+                      ? "bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400"
+                      : t.type === "income"
                       ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
                       : "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
                   }`}
                 >
-                  {(() => { const Icon = getCategoryIcon(t.category); return <Icon className="size-4" />; })()}
+                  {transfer
+                    ? <ArrowLeftRightIcon className="size-4" />
+                    : (() => { const Icon = getCategoryIcon(t.category); return <Icon className="size-4" />; })()}
                 </div>
                 <div className="flex flex-col flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -183,7 +191,9 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     className={`text-sm font-mono font-bold ${
-                      t.type === "income"
+                      transfer
+                        ? "text-sky-600 dark:text-sky-400"
+                        : t.type === "income"
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-red-600 dark:text-red-400"
                     }`}
@@ -211,7 +221,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently remove this {t.type} of{" "}
+                            This will permanently remove this {transfer ? "transfer" : t.type} of{" "}
                             <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
                               {formatCurrency(t.amount)}
                             </code>{" "}
@@ -234,7 +244,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
                   </ButtonGroup>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}
