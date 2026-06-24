@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import withSerwistInit from "@serwist/next";
 
 import pkg from "./package.json";
 
@@ -19,4 +20,17 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withSerwist = withSerwistInit({
+  // Source worker (TypeScript) and the generated output served from /sw.js.
+  swSrc: "src/app/sw.ts",
+  swDest: "public/sw.js",
+  // We register the worker ourselves in <PwaRegister> so we can also clean up
+  // legacy Vite service workers on the way in.
+  register: false,
+  // No service worker in development — only in the production static export.
+  disable: !isProd,
+  cacheOnNavigation: true,
+  reloadOnOnline: true,
+});
+
+export default withSerwist(nextConfig);
