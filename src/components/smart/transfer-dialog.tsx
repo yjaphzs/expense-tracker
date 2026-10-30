@@ -1,13 +1,13 @@
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/shared/responsive-dialog";
+import { FormDialogActions } from "@/components/shared/form-dialog-actions";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -33,6 +33,7 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
   wallets,
   onTransfer,
 }) => {
+  const formId = useId();
   const [fromWalletId, setFromWalletId] = useState("");
   const [toWalletId, setToWalletId] = useState("");
   const [amount, setAmount] = useState("");
@@ -56,6 +57,7 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
     const fromWallet = wallets.find((w) => w.id === fromWalletId);
     const toWallet = wallets.find((w) => w.id === toWalletId);
     const desc = description.trim() || `Transfer: ${fromWallet?.name ?? "?"} → ${toWallet?.name ?? "?"}`;
+    const transferId = crypto.randomUUID();
 
     onTransfer(
       {
@@ -66,6 +68,7 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
         date: dateStr,
         walletId: fromWalletId,
         transfer: true,
+        transferId,
       },
       {
         type: "income",
@@ -75,6 +78,7 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
         date: dateStr,
         walletId: toWalletId,
         transfer: true,
+        transferId,
       }
     );
     resetForm();
@@ -92,20 +96,22 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
     type === "cash" ? <BanknoteIcon className="size-4" /> : <CreditCardIcon className="size-4" />;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Transfer Between Wallets</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-md">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Transfer Between Wallets</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Move funds from one wallet to another.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex items-end gap-2">
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody>
+        <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* From and To sit side by side from sm up, stacked on phones. */}
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:gap-2">
             <div className="flex flex-col gap-2 flex-1">
-              <label className="text-sm font-medium text-muted-foreground">From</label>
+              <label htmlFor={`${formId}-from`} className="text-sm font-medium text-muted-foreground">From</label>
               <Select value={fromWalletId} onValueChange={setFromWalletId}>
-                <SelectTrigger>
+                <SelectTrigger id={`${formId}-from`}>
                   <SelectValue placeholder="Source wallet" />
                 </SelectTrigger>
                 <SelectContent>
@@ -120,13 +126,13 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center justify-center pb-2">
-              <ArrowRightIcon className="size-5 text-muted-foreground" />
+            <div className="flex items-center justify-center pt-2 sm:pt-0 sm:pb-2" aria-hidden>
+              <ArrowRightIcon className="size-5 rotate-90 text-muted-foreground sm:rotate-0" />
             </div>
             <div className="flex flex-col gap-2 flex-1">
-              <label className="text-sm font-medium text-muted-foreground">To</label>
+              <label htmlFor={`${formId}-to`} className="text-sm font-medium text-muted-foreground">To</label>
               <Select value={toWalletId} onValueChange={setToWalletId}>
-                <SelectTrigger>
+                <SelectTrigger id={`${formId}-to`}>
                   <SelectValue placeholder="Target wallet" />
                 </SelectTrigger>
                 <SelectContent>
@@ -144,9 +150,11 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">Amount</label>
+            <label htmlFor={`${formId}-amount`} className="text-sm font-medium text-muted-foreground">Amount</label>
             <Input
+              id={`${formId}-amount`}
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0.01"
               placeholder="0.00"
@@ -158,10 +166,11 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">
+            <label htmlFor={`${formId}-description`} className="text-sm font-medium text-muted-foreground">
               Description <span className="text-muted-foreground/50">(optional)</span>
             </label>
             <Input
+              id={`${formId}-description`}
               type="text"
               placeholder="e.g. Move savings to cash"
               value={description}
@@ -170,17 +179,11 @@ const TransferDialog: React.FC<TransferDialogProps> = ({
             />
           </div>
 
-          <DialogFooter className="mt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!isValid}>
-              Transfer
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogBody>
+        <FormDialogActions formId={formId} submitLabel="Transfer" disabled={!isValid} />
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 };
 

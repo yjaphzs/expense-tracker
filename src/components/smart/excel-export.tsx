@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from "react";
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, subYears, isWithinInterval, startOfWeek, endOfWeek, eachWeekOfInterval } from "date-fns";
-import XLSX from "xlsx-js-style";
 import { Button } from "@/components/ui/button";
 import {
     Select,
@@ -81,9 +80,25 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
         return map;
     }, [wallets]);
 
-    const handleExport = () => {
+    const [exporting, setExporting] = useState(false);
+
+    const handleExport = async () => {
         if (filtered.length === 0) {
             toast.error("No transactions to export for this period.");
+            return;
+        }
+
+        // The spreadsheet library is large (about 140 KB compressed), so it's
+        // fetched on the first export instead of with the page.
+        setExporting(true);
+        let XLSX: typeof import("xlsx-js-style");
+        try {
+            const mod = await import("xlsx-js-style");
+            // CommonJS package: the bundler exposes it as `default`.
+            XLSX = (mod as unknown as { default?: typeof mod }).default ?? mod;
+        } catch {
+            toast.error("Couldn't load the exporter. Check your connection and try again.");
+            setExporting(false);
             return;
         }
 
@@ -437,6 +452,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
         const filename = `expense-tracker-${rangeLabel.toLowerCase().replace(/\s+/g, "-")}-${format(new Date(), "yyyyMMdd")}.xlsx`;
 
         XLSX.writeFile(wb, filename);
+        setExporting(false);
         toast.success(`Exported ${filtered.length} transactions to ${filename}`);
     };
 
@@ -462,7 +478,7 @@ const ExcelExport: React.FC<ExcelExportProps> = ({ transactions, wallets }) => {
                         ))}
                     </SelectContent>
                 </Select>
-                <Button size="sm" variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
+                <Button size="sm" variant="outline" onClick={handleExport} disabled={filtered.length === 0 || exporting}>
                     <DownloadIcon className="size-4 mr-1.5" />
                     Export ({filtered.length} transactions)
                 </Button>

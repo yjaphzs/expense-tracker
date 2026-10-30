@@ -4,6 +4,12 @@ import { logger } from "firebase-functions/v2";
 
 import { APP_URL, callableOptions } from "../../config";
 import { buildInAppActionUrl } from "../../lib/action-links";
+import {
+  EmailQuotaError,
+  emailFallbackError,
+  markEmailQuotaExhausted,
+  reserveEmailSlot,
+} from "../../lib/email/quota";
 import { sendEmail } from "../../lib/email/send";
 import { verificationEmailTemplate } from "../../lib/email/templates";
 import { enforceRateLimit } from "../../lib/rate-limit";
@@ -34,6 +40,9 @@ export const sendVerificationEmail = onCall(callableOptions, async (request) => 
 
   // Cap how often a user can trigger verification emails to themselves.
   await enforceRateLimit({ key: `verify_${uid}`, max: 6, windowSec: 3600 });
+  // Over the daily email budget (or Resend's quota): the client sends
+  // Firebase's built-in verification email instead.
+  if (!(await reserveEmailSlot())) throw emailFallbackError();
 
   try {
     const firebaseLink = await getAuth().generateEmailVerificationLink(email, {
@@ -44,6 +53,10 @@ export const sendVerificationEmail = onCall(callableOptions, async (request) => 
     const { subject, html, text } = verificationEmailTemplate(verifyUrl);
     await sendEmail({ to: email, subject, html, text });
   } catch (err) {
+    if (err instanceof EmailQuotaError) {
+      await markEmailQuotaExhausted(err);
+      throw emailFallbackError();
+    }
     logger.error("[sendVerificationEmail] failed:", err);
     throw new HttpsError("internal", "Couldn't send the verification email.");
   }

@@ -23,6 +23,27 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.0",
+    date: "October 31, 2026",
+    title: "Made for phones",
+    changes: [
+      { type: "new", text: "A bottom tab bar on phones to move between Home, Income, Expenses, Recurring, and Analytics." },
+      { type: "new", text: "A floating Add button that adds to whichever section you're on." },
+      { type: "new", text: "Tap any transaction or recurring item to see its details and edit, pause, or delete it." },
+      { type: "new", text: "Undo right after you delete a transaction." },
+      { type: "improved", text: "Forms and menus open as bottom sheets on phones, with bigger buttons that are easier to tap." },
+      { type: "improved", text: "Amounts show the peso sign (₱), and amount fields open the number keypad." },
+      { type: "improved", text: "Analytics fits small screens, with a view picker and shorter chart labels." },
+      { type: "improved", text: "A short confirmation when you add, edit, or delete something." },
+      { type: "improved", text: "The section you're on stays open when you refresh the page." },
+      { type: "improved", text: "Faster first load: charts, Excel export, and QR Transfer load only when you use them." },
+      { type: "fixed", text: "Deleting one side of a wallet transfer now removes both sides." },
+      { type: "fixed", text: "Transfers can't be edited one side at a time anymore, which used to split them. To change one, delete it and make a new transfer." },
+      { type: "fixed", text: "Your latest change is saved even if you close the app right after making it." },
+      { type: "fixed", text: "You now get a message if a change couldn't be saved to your account." },
+    ],
+  },
+  {
     version: "2.0.0",
     date: "June 22, 2026",
     title: "Accounts & cloud sync",

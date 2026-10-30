@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppCheckActivator } from "@/components/app-check-activator";
 import { AuthBanner } from "@/components/auth-banner";
 import { BrandLogo } from "@/components/brand-logo";
 import { GuestGuard } from "@/components/guest-guard";
@@ -12,6 +13,7 @@ export default function AuthLayout({
   return (
     <GuestGuard>
       <div className="grid min-h-svh lg:grid-cols-2">
+        <AppCheckActivator />
         <div className="flex flex-col gap-4 p-6 md:p-10">
           <div className="flex items-center justify-between">
             <BrandLogo />

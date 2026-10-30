@@ -41,7 +41,8 @@ import { BarChart3Icon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Transaction, Wallet } from "@/types/transaction";
 import { isTransfer } from "@/types/transaction";
-import { formatCurrency } from "@/lib/utils";
+import { formatCompactCurrency, formatCurrency } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-media-query";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { getCategoryIcon } from "@/lib/category-icons";
 
@@ -49,6 +50,14 @@ interface AnalyticsProps {
     transactions: Transaction[];
     wallets: Wallet[];
 }
+
+const ANALYTICS_VIEWS = [
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "overall", label: "Overall" },
+    { value: "income", label: "Income" },
+    { value: "expense", label: "Expense" },
+];
 
 const PERIOD_OPTIONS = [
     { value: "3", label: "Last 3 months" },
@@ -179,8 +188,9 @@ function MonthlyBarChart({ transactions, incomeColor, expenseColor }: { transact
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v: string) => format(parseISO(`${v}-01`), "MMM yyyy")}
+                    minTickGap={16}
                 />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} width={56} />
                 <ChartTooltip
                     content={
                         <ChartTooltipContent
@@ -202,6 +212,7 @@ function MonthlyBarChart({ transactions, incomeColor, expenseColor }: { transact
 
 // --- Chart 2: Category Pie Chart ---
 function CategoryPieChart({ transactions, type, pieColors }: { transactions: Transaction[]; type: "expense" | "income"; pieColors: string[] }) {
+    const isMobile = useIsMobile();
     const data = useMemo(() => {
         const map = new Map<string, number>();
         for (const t of transactions.filter((t) => t.type === type)) {
@@ -253,13 +264,15 @@ function CategoryPieChart({ transactions, type, pieColors }: { transactions: Tra
                         {data.map((_, i) => (
                             <Cell key={i} fill={pieColors[i % pieColors.length]} />
                         ))}
-                        <LabelList
-                            dataKey="amount"
-                            className="fill-foreground"
-                            stroke="none"
-                            fontSize={10}
-                            formatter={(v: number) => formatCurrency(v)}
-                        />
+                        {!isMobile && (
+                            <LabelList
+                                dataKey="amount"
+                                className="fill-foreground"
+                                stroke="none"
+                                fontSize={10}
+                                formatter={(v: number) => formatCompactCurrency(v)}
+                            />
+                        )}
                     </Pie>
                 </PieChart>
             </ChartContainer>
@@ -323,7 +336,7 @@ function DailyCashFlowChart({ transactions, color }: { transactions: Transaction
                     tickFormatter={(v: string) => format(parseISO(v), "MMM d")}
                     minTickGap={30}
                 />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} width={56} />
                 <ChartTooltip
                     content={
                         <ChartTooltipContent
@@ -373,8 +386,8 @@ function WalletComparisonChart({ wallets, transactions, color }: { wallets: Wall
         <ChartContainer config={walletChartConfig} className="aspect-auto h-[250px] w-full">
             <BarChart data={data} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid horizontal={false} />
-                <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} />
-                <YAxis dataKey="wallet" type="category" tickLine={false} axisLine={false} width={100} />
+                <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} minTickGap={16} />
+                <YAxis dataKey="wallet" type="category" tickLine={false} axisLine={false} width={88} />
                 <ChartTooltip
                     content={
                         <ChartTooltipContent
@@ -465,8 +478,9 @@ function WeeklyBarChart({ transactions, incomeColor, expenseColor }: { transacti
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v: string) => format(parseISO(v), "MMM d")}
+                    minTickGap={16}
                 />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} width={56} />
                 <ChartTooltip
                     content={
                         <ChartTooltipContent
@@ -563,13 +577,13 @@ function MonthTracker({ transactions, pieColors }: { transactions: Transaction[]
         <div className="flex flex-col gap-6">
             {/* Month Navigator */}
             <div className="flex items-center justify-center gap-3">
-                <Button variant="outline" size="icon" className="size-8" onClick={() => setMonthOffset(o => o + 1)}>
+                <Button variant="outline" size="icon" className="size-8 max-md:size-10" aria-label="Previous month" onClick={() => setMonthOffset(o => o + 1)}>
                     <ChevronLeftIcon className="size-4" />
                 </Button>
                 <span className="text-sm font-semibold min-w-[140px] text-center">
                     {format(currentMonth, "MMMM yyyy")}
                 </span>
-                <Button variant="outline" size="icon" className="size-8" onClick={() => setMonthOffset(o => Math.max(0, o - 1))} disabled={monthOffset === 0}>
+                <Button variant="outline" size="icon" className="size-8 max-md:size-10" aria-label="Next month" onClick={() => setMonthOffset(o => Math.max(0, o - 1))} disabled={monthOffset === 0}>
                     <ChevronRightIcon className="size-4" />
                 </Button>
             </div>
@@ -578,19 +592,19 @@ function MonthTracker({ transactions, pieColors }: { transactions: Transaction[]
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Income</p>
-                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(summary.income)}</p>
+                    <p className="truncate text-base font-bold sm:text-lg text-green-600 dark:text-green-400">{formatCurrency(summary.income)}</p>
                 </div>
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Expense</p>
-                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatCurrency(summary.expense)}</p>
+                    <p className="truncate text-base font-bold sm:text-lg text-red-600 dark:text-red-400">{formatCurrency(summary.expense)}</p>
                 </div>
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Net</p>
-                    <p className={`text-lg font-bold ${summary.net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(summary.net)}</p>
+                    <p className={`truncate text-base font-bold sm:text-lg ${summary.net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(summary.net)}</p>
                 </div>
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Avg/Week</p>
-                    <p className="text-lg font-bold">{formatCurrency(summary.weeklyAvgExpense)}</p>
+                    <p className="truncate text-base font-bold sm:text-lg">{formatCurrency(summary.weeklyAvgExpense)}</p>
                 </div>
             </div>
 
@@ -601,8 +615,8 @@ function MonthTracker({ transactions, pieColors }: { transactions: Transaction[]
                     <ChartContainer config={weeklyBreakdown.config} className="aspect-auto h-[250px] w-full">
                         <BarChart data={weeklyBreakdown.data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                             <CartesianGrid vertical={false} />
-                            <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} />
-                            <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                            <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} minTickGap={8} />
+                            <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} width={56} />
                             <ChartTooltip
                                 content={
                                     <ChartTooltipContent
@@ -696,13 +710,13 @@ function WeekTracker({ transactions, pieColors }: { transactions: Transaction[];
         <div className="flex flex-col gap-6">
             {/* Week Navigator */}
             <div className="flex items-center justify-center gap-3">
-                <Button variant="outline" size="icon" className="size-8" onClick={() => setWeekOffset(o => o + 1)}>
+                <Button variant="outline" size="icon" className="size-8 max-md:size-10" aria-label="Previous week" onClick={() => setWeekOffset(o => o + 1)}>
                     <ChevronLeftIcon className="size-4" />
                 </Button>
-                <span className="text-sm font-semibold min-w-[200px] text-center">
+                <span className="text-sm font-semibold text-center sm:min-w-[200px]">
                     {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
                 </span>
-                <Button variant="outline" size="icon" className="size-8" onClick={() => setWeekOffset(o => Math.max(0, o - 1))} disabled={weekOffset === 0}>
+                <Button variant="outline" size="icon" className="size-8 max-md:size-10" aria-label="Next week" onClick={() => setWeekOffset(o => Math.max(0, o - 1))} disabled={weekOffset === 0}>
                     <ChevronRightIcon className="size-4" />
                 </Button>
             </div>
@@ -711,19 +725,19 @@ function WeekTracker({ transactions, pieColors }: { transactions: Transaction[];
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Income</p>
-                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(summary.income)}</p>
+                    <p className="truncate text-base font-bold sm:text-lg text-green-600 dark:text-green-400">{formatCurrency(summary.income)}</p>
                 </div>
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Expense</p>
-                    <p className="text-lg font-bold text-red-600 dark:text-red-400">{formatCurrency(summary.expense)}</p>
+                    <p className="truncate text-base font-bold sm:text-lg text-red-600 dark:text-red-400">{formatCurrency(summary.expense)}</p>
                 </div>
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Net</p>
-                    <p className={`text-lg font-bold ${summary.net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(summary.net)}</p>
+                    <p className={`truncate text-base font-bold sm:text-lg ${summary.net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{formatCurrency(summary.net)}</p>
                 </div>
                 <div className="border rounded-lg p-3 text-center">
                     <p className="text-xs text-muted-foreground">Avg/Day</p>
-                    <p className="text-lg font-bold">{formatCurrency(summary.dailyAvgExpense)}</p>
+                    <p className="truncate text-base font-bold sm:text-lg">{formatCurrency(summary.dailyAvgExpense)}</p>
                 </div>
             </div>
 
@@ -734,7 +748,7 @@ function WeekTracker({ transactions, pieColors }: { transactions: Transaction[];
                     <BarChart data={dailyBreakdown.data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                         <CartesianGrid vertical={false} />
                         <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                        <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCurrency(v)} width={80} />
+                        <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatCompactCurrency(v)} width={56} />
                         <ChartTooltip
                             content={
                                 <ChartTooltipContent
@@ -771,10 +785,10 @@ function WeekTracker({ transactions, pieColors }: { transactions: Transaction[];
 // --- Color Palette Selector ---
 function PaletteSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
     return (
-        <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Colors:</span>
+        <div className="flex w-full items-center gap-3 sm:w-auto">
+            <span className="w-14 shrink-0 text-sm text-muted-foreground sm:w-auto">Colors:</span>
             <Select value={value} onValueChange={onChange}>
-                <SelectTrigger className="w-[200px]" size="sm">
+                <SelectTrigger className="flex-1 max-md:h-10 sm:w-[200px] sm:flex-none" size="sm">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -835,11 +849,11 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
     return (
         <div className="flex flex-col gap-6 mt-4">
             {/* Period & Palette selectors */}
-            <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground">Period:</span>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                <div className="flex w-full items-center gap-3 sm:w-auto">
+                    <span className="w-14 shrink-0 text-sm text-muted-foreground sm:w-auto">Period:</span>
                     <Select value={period} onValueChange={setPeriod}>
-                        <SelectTrigger className="w-[180px]" size="sm">
+                        <SelectTrigger className="flex-1 max-md:h-10 sm:w-[180px] sm:flex-none" size="sm">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -856,13 +870,25 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions, wallets }) => {
 
             {/* Sub-tabs */}
             <Tabs value={analyticsTab} onValueChange={setAnalyticsTab}>
-                <TabsList>
-                    <TabsTrigger value="weekly">Weekly</TabsTrigger>
-                    <TabsTrigger value="monthly">Monthly</TabsTrigger>
-                    <TabsTrigger value="overall">Overall</TabsTrigger>
-                    <TabsTrigger value="income">Income</TabsTrigger>
-                    <TabsTrigger value="expense">Expense</TabsTrigger>
+                <TabsList className="max-md:hidden">
+                    {ANALYTICS_VIEWS.map((view) => (
+                        <TabsTrigger key={view.value} value={view.value}>
+                            {view.label}
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
+                <Select value={analyticsTab} onValueChange={setAnalyticsTab}>
+                    <SelectTrigger aria-label="Analytics view" className="h-10 md:hidden">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {ANALYTICS_VIEWS.map((view) => (
+                            <SelectItem key={view.value} value={view.value}>
+                                {view.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
 
                 {/* --- Weekly Tab --- */}
                 <TabsContent value="weekly" className="flex flex-col gap-6">

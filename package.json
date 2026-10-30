@@ -1,7 +1,7 @@
 {
   "name": "expense-tracker",
   "homepage": "https://expense-tracker.yjaphzs.xyz",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -49,6 +49,7 @@
     "serwist": "^9.5.11",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
+    "vaul": "^1.1.2",
     "xlsx-js-style": "^1.2.0",
     "zod": "^4.1.13"
   },

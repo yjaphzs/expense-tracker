@@ -10,13 +10,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -25,8 +18,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { ResponsiveMenu } from "@/components/shared/responsive-menu";
+import type { MenuGroup } from "@/components/shared/menu-types";
 import {
   Empty,
   EmptyHeader,
@@ -41,6 +35,7 @@ import {
   PauseIcon,
   PlayIcon,
   PencilIcon,
+  ChevronRightIcon,
 } from "lucide-react";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { formatCurrency } from "@/lib/utils";
@@ -76,7 +71,9 @@ const RecurringList: React.FC<RecurringListProps> = ({
   onToggle,
   onEdit,
 }) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
+  // One confirmation for the list; kept while the dialog animates closed.
+  const [deleteTarget, setDeleteTarget] = useState<RecurringTransaction | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
 
@@ -105,6 +102,36 @@ const RecurringList: React.FC<RecurringListProps> = ({
     );
   }
 
+  // The same actions as a dropdown (desktop "⋯") and a sheet (tapping a row on phones).
+  const menuGroups = (r: RecurringTransaction): MenuGroup[] => [
+    {
+      id: "actions",
+      items: [
+        ...(onEdit
+          ? [{ kind: "action" as const, id: "edit", label: "Edit", icon: PencilIcon, onSelect: () => onEdit(r) }]
+          : []),
+        {
+          kind: "action",
+          id: "toggle",
+          label: r.enabled ? "Pause" : "Resume",
+          icon: r.enabled ? PauseIcon : PlayIcon,
+          onSelect: () => onToggle(r.id),
+        },
+        {
+          kind: "action",
+          id: "delete",
+          label: "Delete",
+          icon: Trash2Icon,
+          destructive: true,
+          onSelect: () => {
+            setDeleteTarget(r);
+            setDeleteOpen(true);
+          },
+        },
+      ],
+    },
+  ];
+
   return (
     <>
     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-4">
@@ -116,7 +143,7 @@ const RecurringList: React.FC<RecurringListProps> = ({
           setCurrentPage(1);
         }}
       >
-        <SelectTrigger className="h-7 w-[70px] text-xs">
+        <SelectTrigger aria-label="Rows per page" className="h-9 w-[76px] text-sm md:h-7 md:w-[70px] md:text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -137,19 +164,19 @@ const RecurringList: React.FC<RecurringListProps> = ({
           size="sm"
           asChild
           role="listitem"
-          className={r.enabled ? "" : "opacity-50"}
+          className={`relative ${r.enabled ? "" : "opacity-50"}`}
         >
           <div className="flex items-center w-full">
             <ItemContent>
               <ItemTitle className="line-clamp-1 text-muted-foreground text-xs">
                 <Badge
                   variant={r.type === "income" ? "secondary" : "outline"}
-                  className="text-[10px]"
+                  className="text-xs md:text-[10px]"
                 >
                   {(() => { const Icon = getCategoryIcon(r.category); return <Icon className="size-3" />; })()}
                   {r.category}
                 </Badge>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs md:text-[10px]">
                   {FREQUENCY_LABELS[r.frequency]}
                 </Badge>
               </ItemTitle>
@@ -173,94 +200,37 @@ const RecurringList: React.FC<RecurringListProps> = ({
               </ItemDescription>
             </ItemContent>
             <ItemActions>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="More Options"
-                  >
-                    <MoreHorizontalIcon />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuGroup>
-                    {onEdit && (
-                      <DropdownMenuItem onSelect={() => onEdit(r)}>
-                        <PencilIcon className="w-4 h-4" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onSelect={() => onToggle(r.id)}
-                    >
-                      {r.enabled ? (
-                        <>
-                          <PauseIcon className="w-4 h-4" />
-                          Pause
-                        </>
-                      ) : (
-                        <>
-                          <PlayIcon className="w-4 h-4" />
-                          Resume
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    <AlertDialog
-                      open={deleteDialogOpen === r.id}
-                      onOpenChange={(open) => {
-                        if (!open) setDeleteDialogOpen(null);
-                      }}
-                    >
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            setDeleteDialogOpen(r.id);
-                          }}
-                        >
-                          <Trash2Icon className="w-4 h-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <Trash2Icon className="size-10 border rounded-lg bg-primary text-primary-foreground p-2 mx-auto sm:mx-0" />
-                          <AlertDialogTitle>
-                            Delete this recurring transaction?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will stop future automatic transactions for{" "}
-                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                              {formatCurrency(r.amount)} ({r.category} —{" "}
-                              {FREQUENCY_LABELS[r.frequency]})
-                            </code>
-                            . Previously created transactions will remain.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel
-                            onClick={() => setDeleteDialogOpen(null)}
-                          >
-                            Cancel
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => {
-                              onRemove(r.id);
-                              setDeleteDialogOpen(null);
-                            }}
-                            className="bg-destructive text-white hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ChevronRightIcon aria-hidden className="size-5 text-muted-foreground md:hidden" />
+              <div className="hidden md:block">
+                <ResponsiveMenu
+                  mode="menu"
+                  align="end"
+                  title={r.description || r.category}
+                  groups={menuGroups(r)}
+                  trigger={
+                    <Button variant="ghost" size="icon-sm" aria-label={`More options for ${r.description || r.category}`}>
+                      <MoreHorizontalIcon />
+                    </Button>
+                  }
+                />
+              </div>
             </ItemActions>
+            {/* Over the whole row on phones: opens the same actions as a sheet. */}
+            <div className="md:hidden">
+              <ResponsiveMenu
+                mode="sheet"
+                title={r.description || r.category}
+                description={`${formatCurrency(r.amount)} · ${FREQUENCY_LABELS[r.frequency]} · ${r.enabled ? "Active" : "Paused"}`}
+                groups={menuGroups(r)}
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={`Actions for ${r.description || r.category}`}
+                    className="absolute inset-0 rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-foreground/5"
+                  />
+                }
+              />
+            </div>
           </div>
         </Item>
       ))}
@@ -272,6 +242,37 @@ const RecurringList: React.FC<RecurringListProps> = ({
         onPageChange={setCurrentPage}
       />
     </div>
+    <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <Trash2Icon className="size-10 border rounded-lg bg-primary text-primary-foreground p-2 mx-auto sm:mx-0" />
+          <AlertDialogTitle>Delete this recurring transaction?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {deleteTarget && (
+              <>
+                This will stop future automatic transactions for{" "}
+                <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
+                  {formatCurrency(deleteTarget.amount)} ({deleteTarget.category},{" "}
+                  {FREQUENCY_LABELS[deleteTarget.frequency]})
+                </code>
+                . Previously created transactions will remain.
+              </>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (deleteTarget) onRemove(deleteTarget.id);
+            }}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 };

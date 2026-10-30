@@ -8,7 +8,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 
 import { signUp, signInWithGoogle } from "@/lib/firebase/auth";
-import { requestEmailVerification } from "@/lib/firebase/callable";
+import { deliverVerificationEmail } from "@/lib/firebase/email-delivery";
 import { getAuthErrorMessage } from "@/lib/firebase/errors";
 import {
   Field,
@@ -58,7 +58,7 @@ export function RegisterForm() {
       // Best-effort branded verification email via the Cloud Function; the
       // profile doc is created by the AuthProvider once auth state updates.
       try {
-        await requestEmailVerification();
+        await deliverVerificationEmail();
         toast.success("Account created — check your email to verify it.");
       } catch {
         toast.success("Account created.");

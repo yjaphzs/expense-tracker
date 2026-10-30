@@ -9,6 +9,8 @@ import {
   type SetStateAction,
 } from "react";
 
+import { toast } from "sonner";
+
 import { useAuth } from "@/context/auth-provider";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import {
@@ -214,21 +216,73 @@ export function useExpenseData(): UseExpenseData {
     uidRef.current = uid;
   }, [uid]);
 
+  // Every cloud write goes through here. A failure is shown to the user (not
+  // just logged) unless they've since signed out or switched accounts.
+  const writeCloud = useCallback(
+    (targetUid: string, payload: Partial<TrackerState>, label: string) => {
+      writeTrackerState(targetUid, payload).catch((err) => {
+        console.error(`[useExpenseData] ${label} failed:`, err);
+        if (uidRef.current !== targetUid) return;
+        toast.error("Couldn't save to your account", {
+          id: "cloud-write-error",
+          description: "Your latest changes are on this device only. Check your connection and try again.",
+        });
+      });
+    },
+    [],
+  );
+
+  // The debounced write waiting to go out. Kept so it can be flushed (on
+  // unmount, account change, or the tab going to the background) instead of
+  // being dropped when the timer is cancelled.
+  const pendingWriteRef = useRef<{ uid: string; payload: Partial<TrackerState> } | null>(null);
+
+  const flushCloudWrite = useCallback(() => {
+    if (writeTimerRef.current) {
+      clearTimeout(writeTimerRef.current);
+      writeTimerRef.current = null;
+    }
+    const pending = pendingWriteRef.current;
+    pendingWriteRef.current = null;
+    if (pending) writeCloud(pending.uid, pending.payload, "cloud write");
+  }, [writeCloud]);
+
+  /** Explicit writes carry the full state, so any queued debounced write is moot. */
+  const cancelPendingWrite = useCallback(() => {
+    if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+    writeTimerRef.current = null;
+    pendingWriteRef.current = null;
+  }, []);
+
   // Persist a state to the cloud (debounced). When autosave is off, only the
   // flag is written so the cloud keeps its last saved arrays (mirrors guest).
-  const scheduleCloudWrite = useCallback((next: TrackerState) => {
-    const currentUid = uidRef.current;
-    if (!currentUid) return;
-    if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
-    writeTimerRef.current = setTimeout(() => {
-      const payload: Partial<TrackerState> = next.autosave
-        ? next
-        : { autosave: next.autosave };
-      writeTrackerState(currentUid, payload).catch((err) =>
-        console.error("[useExpenseData] cloud write failed:", err),
-      );
-    }, CLOUD_WRITE_DEBOUNCE_MS);
-  }, []);
+  const scheduleCloudWrite = useCallback(
+    (next: TrackerState) => {
+      const currentUid = uidRef.current;
+      if (!currentUid) return;
+      pendingWriteRef.current = {
+        uid: currentUid,
+        payload: next.autosave ? next : { autosave: next.autosave },
+      };
+      if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+      writeTimerRef.current = setTimeout(flushCloudWrite, CLOUD_WRITE_DEBOUNCE_MS);
+    },
+    [flushCloudWrite],
+  );
+
+  // Phones often background or close the tab right after an edit: send the
+  // queued write before that happens.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flushCloudWrite();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushCloudWrite);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushCloudWrite);
+    };
+  }, [flushCloudWrite]);
 
   // ── Cloud subscription (per signed-in user) ────────────────────────────────
   useEffect(() => {
@@ -264,9 +318,7 @@ export function useExpenseData(): UseExpenseData {
           // Fresh (empty) account — seed it from local so the user keeps their
           // guest data, including the default wallet, instead of starting blank.
           setCloud(local);
-          writeTrackerState(uid, local).catch((err) =>
-            console.error("[useExpenseData] initial push failed:", err),
-          );
+          writeCloud(uid, local, "initial push");
           markReconciled(uid);
         } else {
           // No conflict (cloud has data and local matches/empty, or both empty).
@@ -297,9 +349,11 @@ export function useExpenseData(): UseExpenseData {
 
     return () => {
       unsub();
-      if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+      // Send (don't drop) an edit made just before leaving the page or
+      // switching accounts.
+      flushCloudWrite();
     };
-  }, [uid]);
+  }, [uid, writeCloud, flushCloudWrite]);
 
   // ── Cloud setters (mirror the useState dispatcher API) ─────────────────────
   const cloudSetTransactions = useCallback<
@@ -385,10 +439,8 @@ export function useExpenseData(): UseExpenseData {
     (state: TrackerState) => {
       if (uidRef.current) {
         setCloud(state);
-        if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
-        writeTrackerState(uidRef.current, state).catch((err) =>
-          console.error("[useExpenseData] replaceAll failed:", err),
-        );
+        cancelPendingWrite();
+        writeCloud(uidRef.current, state, "replaceAll");
       } else {
         setLsAutosave(state.autosave);
         setLsTransactions(state.transactions);
@@ -397,19 +449,17 @@ export function useExpenseData(): UseExpenseData {
         writeGuest(state);
       }
     },
-    [setLsAutosave, setLsTransactions, setLsRecurring, setLsWallets, writeGuest],
+    [setLsAutosave, setLsTransactions, setLsRecurring, setLsWallets, writeGuest, cancelPendingWrite, writeCloud],
   );
 
   const persistNow = useCallback(() => {
     if (uidRef.current) {
-      if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
-      writeTrackerState(uidRef.current, cloudRef.current).catch((err) =>
-        console.error("[useExpenseData] persistNow failed:", err),
-      );
+      cancelPendingWrite();
+      writeCloud(uidRef.current, cloudRef.current, "persistNow");
     } else {
       writeGuest(lsRef.current);
     }
-  }, [writeGuest]);
+  }, [writeGuest, cancelPendingWrite, writeCloud]);
 
   const removeAll = useCallback(() => {
     const reset: TrackerState = {
@@ -432,13 +482,11 @@ export function useExpenseData(): UseExpenseData {
             ? conflict.cloud
             : mergeStates(conflict.local, conflict.cloud);
       setCloud(result);
-      writeTrackerState(uidRef.current, result).catch((err) =>
-        console.error("[useExpenseData] merge resolve failed:", err),
-      );
+      writeCloud(uidRef.current, result, "merge resolve");
       markReconciled(uidRef.current);
       return null;
     });
-  }, []);
+  }, [writeCloud]);
 
   // Loading while auth is still resolving, or (signed in) until the first cloud
   // snapshot arrives — so the UI can show a loader instead of an empty flash.

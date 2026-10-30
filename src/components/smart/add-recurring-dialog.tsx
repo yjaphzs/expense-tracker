@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useId } from "react";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/shared/responsive-dialog";
+import { FormDialogActions } from "@/components/shared/form-dialog-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -64,6 +64,7 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
   editingRecurring,
 }) => {
   const isEditing = !!editingRecurring;
+  const formId = useId();
   const [type, setType] = useState<TransactionType>("expense");
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
@@ -145,21 +146,23 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
   const isValid = category && amount && parseFloat(amount) > 0 && walletId;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Recurring Transaction" : "Add Recurring Transaction"}</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{isEditing ? "Edit Recurring Transaction" : "Add Recurring Transaction"}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             {isEditing ? "Update the details of this recurring transaction." : "Set up automatic transactions that repeat on a schedule."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody>
+        <form id={formId} onSubmit={handleSubmit} className="grid gap-4">
           {/* Type toggle */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Type</label>
-            <div className="flex gap-2">
+            <span className="text-sm font-medium">Type</span>
+            <div role="group" aria-label="Type" className="flex gap-2">
               <Button
                 type="button"
+                aria-pressed={type === "expense"}
                 variant={type === "expense" ? "destructive" : "outline"}
                 className="flex-1"
                 onClick={() => {
@@ -171,6 +174,7 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
               </Button>
               <Button
                 type="button"
+                aria-pressed={type === "income"}
                 variant={type === "income" ? "default" : "outline"}
                 className={`flex-1 ${type === "income" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
                 onClick={() => {
@@ -185,9 +189,9 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
           {/* Category */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Category</label>
+            <label htmlFor={`${formId}-category`} className="text-sm font-medium">Category</label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
+              <SelectTrigger id={`${formId}-category`}>
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
@@ -208,9 +212,9 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
           {/* Wallet */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Wallet</label>
+            <label htmlFor={`${formId}-wallet`} className="text-sm font-medium">Wallet</label>
             <Select value={walletId} onValueChange={setWalletId}>
-              <SelectTrigger>
+              <SelectTrigger id={`${formId}-wallet`}>
                 <SelectValue placeholder="Select a wallet" />
               </SelectTrigger>
               <SelectContent>
@@ -228,9 +232,11 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
           {/* Amount */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Amount</label>
+            <label htmlFor={`${formId}-amount`} className="text-sm font-medium">Amount</label>
             <Input
+              id={`${formId}-amount`}
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0.01"
               placeholder="0.00"
@@ -243,11 +249,12 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
           {/* Description */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">
+            <label htmlFor={`${formId}-description`} className="text-sm font-medium">
               Description{" "}
               <span className="text-muted-foreground/50">(optional)</span>
             </label>
             <Input
+              id={`${formId}-description`}
               type="text"
               placeholder="e.g. Weekly allowance from parents"
               value={description}
@@ -258,9 +265,9 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
           {/* Frequency */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Frequency</label>
+            <label htmlFor={`${formId}-frequency`} className="text-sm font-medium">Frequency</label>
             <Select value={frequency} onValueChange={(v) => setFrequency(v as RecurrenceFrequency)}>
-              <SelectTrigger>
+              <SelectTrigger id={`${formId}-frequency`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -275,10 +282,11 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
 
           {/* Start Date */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Start Date</label>
+            <label htmlFor={`${formId}-date`} className="text-sm font-medium">Start Date</label>
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
+                  id={`${formId}-date`}
                   type="button"
                   variant="outline"
                   className="w-full justify-between font-normal"
@@ -312,19 +320,15 @@ const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
             </Popover>
           </div>
 
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline" type="button">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={!isValid}>
-              {isEditing ? "Save Changes" : "Save"}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogBody>
+        <FormDialogActions
+          formId={formId}
+          submitLabel={isEditing ? "Save Changes" : "Save"}
+          disabled={!isValid}
+        />
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 };
 

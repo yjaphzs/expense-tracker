@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from "@/components/ui/dialog";
+    ResponsiveDialog,
+    ResponsiveDialogBody,
+    ResponsiveDialogContent,
+    ResponsiveDialogDescription,
+    ResponsiveDialogHeader,
+    ResponsiveDialogTitle,
+} from "@/components/shared/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -70,10 +71,11 @@ function SendMode({ transactions, wallets, recurring, autosave }: {
 
     return (
         <div className="flex flex-col items-center gap-4">
-            <div className="bg-white p-4 rounded-lg">
+            <div className="bg-white p-4 rounded-lg max-w-full">
                 <QRCodeSVG
                     value={qrData}
                     size={256}
+                    className="h-auto max-w-full"
                     level={totalChunks > 1 ? "L" : "M"}
                 />
             </div>
@@ -91,6 +93,8 @@ function SendMode({ transactions, wallets, recurring, autosave }: {
                     <Button
                         variant="outline"
                         size="icon-sm"
+                        className="max-md:size-10"
+                        aria-label="Previous QR code"
                         disabled={chunkIndex === 0}
                         onClick={() => setChunkIndex((i) => i - 1)}
                     >
@@ -102,6 +106,8 @@ function SendMode({ transactions, wallets, recurring, autosave }: {
                     <Button
                         variant="outline"
                         size="icon-sm"
+                        className="max-md:size-10"
+                        aria-label="Next QR code"
                         disabled={chunkIndex === totalChunks - 1}
                         onClick={() => setChunkIndex((i) => i + 1)}
                     >
@@ -312,19 +318,21 @@ const QrTransferDialog: React.FC<QrTransferDialogProps> = ({
     const [mode, setMode] = useState<"send" | "receive">("send");
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>QR Transfer</DialogTitle>
-                    <DialogDescription>
+        <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+            <ResponsiveDialogContent className="sm:max-w-lg">
+                <ResponsiveDialogHeader>
+                    <ResponsiveDialogTitle>QR Transfer</ResponsiveDialogTitle>
+                    <ResponsiveDialogDescription>
                         {mode === "send"
                             ? "Show this QR code on the sending device. Scan it with the receiving device."
                             : "Scan the QR code from the sending device to import data."}
-                    </DialogDescription>
-                </DialogHeader>
+                    </ResponsiveDialogDescription>
+                </ResponsiveDialogHeader>
 
-                <div className="flex justify-center gap-2 mb-2">
+                <ResponsiveDialogBody className="grid gap-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-0">
+                <div role="group" aria-label="Mode" className="flex justify-center gap-2 mb-2">
                     <Button
+                        aria-pressed={mode === "send"}
                         variant={mode === "send" ? "default" : "outline"}
                         size="sm"
                         onClick={() => setMode("send")}
@@ -332,6 +340,7 @@ const QrTransferDialog: React.FC<QrTransferDialogProps> = ({
                         <QrCodeIcon className="size-4" /> Send
                     </Button>
                     <Button
+                        aria-pressed={mode === "receive"}
                         variant={mode === "receive" ? "default" : "outline"}
                         size="sm"
                         onClick={() => setMode("receive")}
@@ -353,8 +362,9 @@ const QrTransferDialog: React.FC<QrTransferDialogProps> = ({
                         onClose={() => onOpenChange(false)}
                     />
                 )}
-            </DialogContent>
-        </Dialog>
+                </ResponsiveDialogBody>
+            </ResponsiveDialogContent>
+        </ResponsiveDialog>
     );
 };
 

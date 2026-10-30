@@ -3,17 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
   Empty,
   EmptyHeader,
   EmptyMedia,
@@ -25,7 +14,9 @@ import {
   WalletIcon,
   PencilIcon,
   ArrowLeftRightIcon,
+  ChevronRightIcon,
 } from "lucide-react";
+import { TransactionActionSheet } from "@/components/smart/transaction-action-sheet";
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { Transaction, Wallet } from "@/types/transaction";
 import { isTransfer } from "@/types/transaction";
@@ -44,7 +35,8 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 interface TransactionListProps {
   transactions: Transaction[];
   wallets: Wallet[];
-  onRemove: (id: string) => void;
+  /** Deletes right away; the caller offers Undo (a transfer goes with its other leg). */
+  onRemove: (transaction: Transaction) => void;
   onEdit?: (transaction: Transaction) => void;
 }
 
@@ -57,6 +49,10 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const walletMap = Object.fromEntries(wallets.map((w) => [w.id, w.name]));
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  // Phones: tapping a row opens its action sheet. The tapped row outlives
+  // `sheetOpen` so the sheet keeps its content while it animates closed.
+  const [tapped, setTapped] = useState<Transaction | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Sort all transactions by date descending, then paginate
   const sorted = useMemo(
@@ -127,7 +123,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
             setCurrentPage(1);
           }}
         >
-          <SelectTrigger className="h-7 w-[70px] text-xs">
+          <SelectTrigger className="h-9 w-[76px] text-sm md:h-7 md:w-[70px] md:text-xs" aria-label="Rows per page">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -151,7 +147,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
               return (
               <div
                 key={t.id}
-                className="flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
+                className="relative flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
               >
                 <div
                   className={`flex items-center justify-center size-9 rounded-full shrink-0 ${
@@ -171,7 +167,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     <span className="text-sm font-medium truncate">
                       {t.description || t.category}
                     </span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">
+                    <Badge variant="outline" className="hidden shrink-0 text-[10px] sm:inline-flex">
                       {t.category}
                     </Badge>
                   </div>
@@ -182,7 +178,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                       </span>
                     )}
                     {walletMap[t.walletId] && (
-                      <span className="text-[10px] text-muted-foreground/60">
+                      <span className="text-xs text-muted-foreground/60 md:text-[10px]">
                         {t.description ? " · " : ""}{walletMap[t.walletId]}
                       </span>
                     )}
@@ -201,48 +197,38 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     {t.type === "income" ? "+" : "-"}
                     {formatCurrency(t.amount)}
                   </span>
-                  <ButtonGroup>
-                    {onEdit && (
+                  <ChevronRightIcon aria-hidden className="size-5 text-muted-foreground md:hidden" />
+                  <ButtonGroup className="hidden md:flex">
+                    {onEdit && !transfer && (
                       <Button
                         variant="outline"
                         size="icon-sm"
+                        aria-label={`Edit ${t.description || t.category}`}
                         onClick={() => onEdit(t)}
                       >
                         <PencilIcon className="size-3.5" />
                       </Button>
                     )}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon-sm">
-                          <Trash2Icon className="size-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently remove this {transfer ? "transfer" : t.type} of{" "}
-                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                              {formatCurrency(t.amount)}
-                            </code>{" "}
-                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                              ({t.category})
-                            </code>.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => onRemove(t.id)}
-                            className="bg-destructive text-white hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <Button
+                      variant="destructive"
+                      size="icon-sm"
+                      aria-label={`Delete ${t.description || t.category}`}
+                      onClick={() => onRemove(t)}
+                    >
+                      <Trash2Icon className="size-3.5" />
+                    </Button>
                   </ButtonGroup>
                 </div>
+                {/* Over the whole row on phones, where the inline buttons are hidden. */}
+                <button
+                  type="button"
+                  aria-label={`Actions for ${t.description || t.category}`}
+                  onClick={() => {
+                    setTapped(t);
+                    setSheetOpen(true);
+                  }}
+                  className="absolute inset-0 rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-foreground/5 md:hidden"
+                />
               </div>
               );
             })}
@@ -253,6 +239,16 @@ const TransactionList: React.FC<TransactionListProps> = ({
         currentPage={safePage}
         totalPages={totalPages}
         onPageChange={setCurrentPage}
+      />
+      <TransactionActionSheet
+        transaction={tapped}
+        walletName={tapped ? walletMap[tapped.walletId] : undefined}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        // A transfer is edited by deleting it and making a new one: editing one
+        // leg on its own would turn it into plain income or expense.
+        onEdit={tapped && isTransfer(tapped) ? undefined : onEdit}
+        onRemove={onRemove}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/site-header";
@@ -13,7 +14,16 @@ import {
     TabsTrigger
 } from "@/components/ui/tabs";
 
-import { PlusIcon, WalletIcon, RepeatIcon, ArrowLeftRightIcon } from "lucide-react";
+import {
+    PlusIcon,
+    WalletIcon,
+    RepeatIcon,
+    ArrowLeftRightIcon,
+    HomeIcon,
+    TrendingUpIcon,
+    TrendingDownIcon,
+    ChartPieIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Empty,
@@ -27,21 +37,56 @@ import {
 import BalanceSummary from "@/components/smart/balance-summary";
 import TransactionDialog, { type FormMode } from "@/components/smart/add-transaction-dialog";
 import TransactionList from "@/components/smart/transaction-list";
-import type { Transaction, RecurringTransaction, TrackerState } from "@/types";
+import type { Transaction, RecurringTransaction, TrackerState, WalletType } from "@/types";
 import WalletCards from "@/components/smart/wallet-cards";
 import RecurringList from "@/components/smart/recurring-list";
 import AddRecurringDialog from "@/components/smart/add-recurring-dialog";
 import TransferDialog from "@/components/smart/transfer-dialog";
-import QrTransferDialog from "@/components/smart/qr-transfer-dialog";
 import DataToolbar from "@/components/smart/data-toolbar";
-import Analytics from "@/components/smart/analytics";
-import ExcelExport from "@/components/smart/excel-export";
 import { MergeDialog } from "@/components/smart/merge-dialog";
 import { TrackerSkeleton } from "@/components/smart/tracker-skeleton";
 import { useExpenseData } from "@/hooks/use-expense-data";
 import { useTransactionLogic } from "@/hooks/use-transactions";
 import { useWalletLogic } from "@/hooks/use-wallets";
 import { useRecurringLogic } from "@/hooks/use-recurring-transactions";
+import { Skeleton } from "@/components/ui/skeleton";
+import { BottomTabBar, type BottomTab } from "@/components/shared/bottom-tab-bar";
+import { FloatingAddButton } from "@/components/shared/floating-add-button";
+import { useUrlTab } from "@/hooks/use-url-tab";
+import { cn, formatCurrency } from "@/lib/utils";
+import { isTransfer } from "@/types/transaction";
+
+/** Placeholder while the Analytics tab's code loads (first visit only). */
+function AnalyticsLoading() {
+    return (
+        <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading analytics">
+            <Skeleton className="h-9 w-full max-w-sm" />
+            <Skeleton className="h-[300px] w-full" />
+            <Skeleton className="h-[250px] w-full" />
+        </div>
+    );
+}
+
+// The Analytics tab (charts) and Excel export are the heaviest parts of the
+// app, so they load the first time that tab is opened, not with the page.
+const Analytics = dynamic(() => import("@/components/smart/analytics"), {
+    ssr: false,
+    loading: () => <AnalyticsLoading />,
+});
+const ExcelExport = dynamic(() => import("@/components/smart/excel-export"), { ssr: false });
+// QR codes and the camera scanner: only downloaded once QR Transfer is opened.
+const QrTransferDialog = dynamic(() => import("@/components/smart/qr-transfer-dialog"), { ssr: false });
+
+type Section = "home" | "income" | "expenses" | "recurring" | "analytics";
+
+const SECTIONS: BottomTab<Section>[] = [
+    { value: "home", label: "Home", icon: HomeIcon },
+    { value: "income", label: "Income", icon: TrendingUpIcon },
+    { value: "expenses", label: "Expenses", icon: TrendingDownIcon },
+    { value: "recurring", label: "Recurring", icon: RepeatIcon },
+    { value: "analytics", label: "Analytics", icon: ChartPieIcon },
+];
+const SECTION_VALUES = SECTIONS.map((section) => section.value);
 
 export default function Home() {
     const data = useExpenseData();
@@ -62,7 +107,7 @@ export default function Home() {
         resolveMerge,
     } = data;
 
-    const [tab, setTab] = useState("home");
+    const [tab, setTab] = useUrlTab<Section>(SECTION_VALUES, "home");
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<FormMode | undefined>(undefined);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -71,11 +116,17 @@ export default function Home() {
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
     const [transferDialogOpen, setTransferDialogOpen] = useState(false);
     const [qrTransferOpen, setQrTransferOpen] = useState(false);
+    const [qrTransferUsed, setQrTransferUsed] = useState(false);
+    const openQrTransfer = () => {
+        setQrTransferUsed(true);
+        setQrTransferOpen(true);
+    };
     const [walletManageOpen, setWalletManageOpen] = useState(false);
 
     const {
         addTransaction,
         removeTransaction,
+        restoreTransactions,
         editTransaction,
         summary,
         getFilteredTransactions,
@@ -120,12 +171,47 @@ export default function Home() {
         walletBalances,
     } = useWalletLogic(wallets, setWallets, transactions);
 
+    const handleAddWallet = (name: string, type: WalletType) => {
+        addWallet(name, type);
+        toast.success(`Wallet "${name}" added`);
+    };
+
+    const handleRemoveWallet = (id: string) => {
+        removeWallet(id);
+        toast.success("Wallet deleted");
+    };
+
     const walletHasTransactions = (walletId: string) =>
         transactions.some((t) => t.walletId === walletId);
 
     const onTabChange = (value: string) => {
-        setTab(value);
+        setTab(value as Section);
     };
+
+    // Deletes right away and offers Undo (a transfer goes with its other leg),
+    // instead of a confirmation dialog on every row.
+    const handleDelete = (t: Transaction) => {
+        const removed = removeTransaction(t.id);
+        if (removed.length === 0) return;
+        const what = isTransfer(t) ? "Transfer" : t.type === "income" ? "Income" : "Expense";
+        toast(`${what} deleted`, {
+            description: `${t.description || t.category} · ${formatCurrency(t.amount)}`,
+            action: { label: "Undo", onClick: () => restoreTransactions(removed) },
+        });
+    };
+
+    // Phones: the floating Add button does what the current section's Add does.
+    const floatingAdd: { label: string; onClick: () => void } | null =
+        tab === "home"
+            ? { label: "Add", onClick: () => handleOpenAdd() }
+            : tab === "income"
+              ? { label: "Add income", onClick: () => handleOpenAdd("income") }
+              : tab === "expenses"
+                ? { label: "Add expense", onClick: () => handleOpenAdd("expense") }
+                : tab === "recurring"
+                  ? { label: "Add recurring", onClick: () => handleOpenAdd("recurring") }
+                  : null;
+    const showPhoneNav = !loading && wallets.length > 0;
 
     // --- Data management handlers ---
 
@@ -242,16 +328,22 @@ export default function Home() {
     };
 
     return (
-        <div className="flex min-h-svh flex-col">
+        <div
+            className={cn(
+                "flex min-h-svh flex-col",
+                // Clear the fixed bottom tab bar on phones.
+                showPhoneNav && "max-md:pb-[calc(3.5rem+env(safe-area-inset-bottom))]",
+            )}
+        >
             <SiteHeader />
             <main className="w-full flex-1">
-                <div className="mx-auto w-full max-w-3xl px-4 py-6">
+                <div className={cn("mx-auto w-full max-w-3xl px-4 py-6", showPhoneNav && "max-md:pb-24")}>
                     {loading ? (
                     <TrackerSkeleton />
                     ) : (
                     <Tabs value={tab} onValueChange={onTabChange}>
                         {wallets.length > 0 && (
-                            <TabsList className="mt-2">
+                            <TabsList className="mt-2 max-md:hidden">
                                 <TabsTrigger value="home">Home</TabsTrigger>
                                 <TabsTrigger value="income">Income</TabsTrigger>
                                 <TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -268,8 +360,8 @@ export default function Home() {
                             <WalletCards
                                 wallets={wallets}
                                 walletBalances={walletBalances}
-                                onAddWallet={addWallet}
-                                onRemoveWallet={removeWallet}
+                                onAddWallet={handleAddWallet}
+                                onRemoveWallet={handleRemoveWallet}
                                 hasTransactions={walletHasTransactions}
                                 manageOpen={walletManageOpen}
                                 onManageOpenChange={setWalletManageOpen}
@@ -284,7 +376,7 @@ export default function Home() {
                             )}
                             {wallets.length > 0 && (
                                 <>
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-6 gap-4">
+                                    <div className="flex items-center justify-between mt-6 gap-4">
                                         <h2 className="text-lg font-semibold">Recent Transactions</h2>
                                         {transactions.length > 0 && (
                                             <DataToolbar
@@ -298,7 +390,7 @@ export default function Home() {
                                                 handleReset={handleReset}
                                                 handleImport={handleImport}
                                                 handleExport={handleExport}
-                                                onQrTransfer={() => setQrTransferOpen(true)}
+                                                onQrTransfer={openQrTransfer}
                                                 hasWallets
                                                 hasItems
                                                 onManageWallets={() => setWalletManageOpen(true)}
@@ -317,7 +409,7 @@ export default function Home() {
                                             handleReset={handleReset}
                                             handleImport={handleImport}
                                             handleExport={handleExport}
-                                            onQrTransfer={() => setQrTransferOpen(true)}
+                                            onQrTransfer={openQrTransfer}
                                             hasWallets
                                             hasItems={false}
                                             onManageWallets={() => setWalletManageOpen(true)}
@@ -326,7 +418,7 @@ export default function Home() {
                                         <TransactionList
                                             transactions={transactions}
                                             wallets={wallets}
-                                            onRemove={removeTransaction}
+                                            onRemove={handleDelete}
                                             onEdit={handleOpenEdit}
                                         />
                                     )}
@@ -337,7 +429,7 @@ export default function Home() {
                             <div className="flex items-center justify-between mt-4">
                                 <h2 className="text-lg font-semibold">Income</h2>
                                 {wallets.length > 0 && getFilteredTransactions("income").length > 0 && (
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenAdd("income")}>
+                                    <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => handleOpenAdd("income")}>
                                         <PlusIcon className="size-4" />
                                         Add Income
                                     </Button>
@@ -373,7 +465,7 @@ export default function Home() {
                                 <TransactionList
                                     transactions={getFilteredTransactions("income")}
                                     wallets={wallets}
-                                    onRemove={removeTransaction}
+                                    onRemove={handleDelete}
                                     onEdit={handleOpenEdit}
                                 />
                             )}
@@ -382,7 +474,7 @@ export default function Home() {
                             <div className="flex items-center justify-between mt-4">
                                 <h2 className="text-lg font-semibold">Expenses</h2>
                                 {wallets.length > 0 && getFilteredTransactions("expense").length > 0 && (
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenAdd("expense")}>
+                                    <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => handleOpenAdd("expense")}>
                                         <PlusIcon className="size-4" />
                                         Add Expense
                                     </Button>
@@ -418,7 +510,7 @@ export default function Home() {
                                 <TransactionList
                                     transactions={getFilteredTransactions("expense")}
                                     wallets={wallets}
-                                    onRemove={removeTransaction}
+                                    onRemove={handleDelete}
                                     onEdit={handleOpenEdit}
                                 />
                             )}
@@ -427,7 +519,7 @@ export default function Home() {
                             <div className="flex items-center justify-between mt-4">
                                 <h2 className="text-lg font-semibold">Recurring</h2>
                                 {wallets.length > 0 && recurring.length > 0 && (
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenAdd("recurring")}>
+                                    <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => handleOpenAdd("recurring")}>
                                         <PlusIcon className="size-4" />
                                         Add Recurring
                                     </Button>
@@ -462,8 +554,15 @@ export default function Home() {
                             ) : (
                                 <RecurringList
                                     items={recurring}
-                                    onRemove={removeRecurring}
-                                    onToggle={toggleRecurring}
+                                    onRemove={(id) => {
+                                        removeRecurring(id);
+                                        toast.success("Recurring transaction deleted");
+                                    }}
+                                    onToggle={(id) => {
+                                        const item = recurring.find((r) => r.id === id);
+                                        toggleRecurring(id);
+                                        if (item) toast.success(item.enabled ? "Recurring transaction paused" : "Recurring transaction resumed");
+                                    }}
                                     onEdit={(r) => {
                                         setEditingRecurring(r);
                                         setRecurringDialogOpen(true);
@@ -489,8 +588,8 @@ export default function Home() {
                 <WalletCards
                     wallets={wallets}
                     walletBalances={walletBalances}
-                    onAddWallet={addWallet}
-                    onRemoveWallet={removeWallet}
+                    onAddWallet={handleAddWallet}
+                    onRemoveWallet={handleRemoveWallet}
                     hasTransactions={walletHasTransactions}
                     manageOpen={walletManageOpen}
                     onManageOpenChange={setWalletManageOpen}
@@ -501,9 +600,18 @@ export default function Home() {
             <TransactionDialog
                 open={dialogOpen}
                 onOpenChange={setDialogOpen}
-                onAdd={addTransaction}
-                onEdit={editTransaction}
-                onAddRecurring={addRecurring}
+                onAdd={(data) => {
+                    addTransaction(data);
+                    toast.success(data.type === "income" ? "Income added" : "Expense added");
+                }}
+                onEdit={(id, data) => {
+                    editTransaction(id, data);
+                    toast.success("Transaction updated");
+                }}
+                onAddRecurring={(data) => {
+                    addRecurring(data);
+                    toast.success("Recurring transaction added");
+                }}
                 wallets={wallets}
                 editingTransaction={editingTransaction}
                 lockedType={dialogMode}
@@ -515,8 +623,14 @@ export default function Home() {
                     setRecurringDialogOpen(open);
                     if (!open) setEditingRecurring(null);
                 }}
-                onAdd={addRecurring}
-                onEdit={editRecurring}
+                onAdd={(data) => {
+                    addRecurring(data);
+                    toast.success("Recurring transaction added");
+                }}
+                onEdit={(id, data) => {
+                    editRecurring(id, data);
+                    toast.success("Recurring transaction updated");
+                }}
                 wallets={wallets}
                 editingRecurring={editingRecurring}
             />
@@ -528,9 +642,11 @@ export default function Home() {
                 onTransfer={(fromTx, toTx) => {
                     addTransaction(fromTx);
                     addTransaction(toTx);
+                    toast.success("Transfer added");
                 }}
             />
 
+            {qrTransferUsed && (
             <QrTransferDialog
                 open={qrTransferOpen}
                 onOpenChange={setQrTransferOpen}
@@ -554,8 +670,16 @@ export default function Home() {
                     toast.success("Data imported via QR transfer!");
                 }}
             />
+            )}
 
             <MergeDialog conflict={pendingMerge} onResolve={resolveMerge} />
+
+            {showPhoneNav && (
+                <>
+                    <BottomTabBar tabs={SECTIONS} value={tab} onChange={setTab} />
+                    {floatingAdd && <FloatingAddButton label={floatingAdd.label} onClick={floatingAdd.onClick} />}
+                </>
+            )}
 
             <footer className="mt-12 border-t">
                 <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-4 py-4">

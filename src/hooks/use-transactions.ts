@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Transaction, TransactionType } from "@/types/transaction";
-import { isTransfer } from "@/types/transaction";
+import { isTransfer, transferPartner } from "@/types/transaction";
 
 /**
  * Derived transaction helpers over lifted state. The state itself lives in
@@ -23,9 +23,30 @@ export function useTransactionLogic(
     [setTransactions],
   );
 
+  /**
+   * Removes a transaction (both legs, for a transfer) and returns what was
+   * removed so the caller can offer Undo with `restoreTransactions`.
+   */
   const removeTransaction = useCallback(
-    (id: string) => {
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    (id: string): Transaction[] => {
+      const target = transactions.find((t) => t.id === id);
+      if (!target) return [];
+      const partner = transferPartner(transactions, target);
+      const removed = partner ? [target, partner] : [target];
+      const ids = new Set(removed.map((t) => t.id));
+      setTransactions((prev) => prev.filter((t) => !ids.has(t.id)));
+      return removed;
+    },
+    [transactions, setTransactions],
+  );
+
+  /** Puts back transactions removed by `removeTransaction` (Undo). */
+  const restoreTransactions = useCallback(
+    (items: Transaction[]) => {
+      setTransactions((prev) => {
+        const present = new Set(prev.map((t) => t.id));
+        return [...items.filter((t) => !present.has(t.id)), ...prev];
+      });
     },
     [setTransactions],
   );
@@ -68,6 +89,7 @@ export function useTransactionLogic(
   return {
     addTransaction,
     removeTransaction,
+    restoreTransactions,
     editTransaction,
     summary,
     getFilteredTransactions,

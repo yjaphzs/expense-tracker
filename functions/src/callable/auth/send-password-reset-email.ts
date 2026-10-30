@@ -4,6 +4,11 @@ import { logger } from "firebase-functions/v2";
 
 import { APP_URL, callableOptions } from "../../config";
 import { buildInAppActionUrl } from "../../lib/action-links";
+import {
+  EmailQuotaError,
+  markEmailQuotaExhausted,
+  reserveEmailSlot,
+} from "../../lib/email/quota";
 import { sendEmail } from "../../lib/email/send";
 import { passwordResetEmailTemplate } from "../../lib/email/templates";
 import { enforceRateLimit, getClientIp } from "../../lib/rate-limit";
@@ -45,6 +50,11 @@ export const sendPasswordResetEmail = onCall<SendPasswordResetEmailData>(
       windowSec: 3600,
     });
 
+    // Over the daily email budget (or Resend's quota): tell the client to ask
+    // Firebase Auth for its built-in reset email. Checked before the account
+    // lookup, so every address gets the same answer.
+    if (!(await reserveEmailSlot())) return { submitted: true, fallback: true };
+
     try {
       const user = await getAuth()
         .getUserByEmail(email)
@@ -60,6 +70,10 @@ export const sendPasswordResetEmail = onCall<SendPasswordResetEmailData>(
         await sendEmail({ to: email, subject, html, text });
       }
     } catch (err) {
+      if (err instanceof EmailQuotaError) {
+        await markEmailQuotaExhausted(err);
+        return { submitted: true, fallback: true };
+      }
       // Swallow errors so the response is identical whether or not the email
       // exists (prevents account enumeration). Failures are logged for ops.
       logger.error("[sendPasswordResetEmail] failed to send:", err);

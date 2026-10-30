@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useId } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/shared/responsive-dialog";
+import { FormDialogActions } from "@/components/shared/form-dialog-actions";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -88,6 +89,7 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
   lockedType,
 }) => {
   const isEditing = !!editingTransaction;
+  const formId = useId();
 
   const [mode, setMode] = useState<FormMode>("expense");
   const [recurringType, setRecurringType] = useState<TransactionType>("expense");
@@ -193,20 +195,22 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{getTitle()}</DialogTitle>
-          <DialogDescription>{getDialogDescription()}</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{getTitle()}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>{getDialogDescription()}</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody>
+        <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Mode selector - add mode, no lock */}
           {!lockedType && !isEditing && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Type</label>
-              <div className="flex gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Type</span>
+              <div role="group" aria-label="Type" className="flex gap-2">
                 <Button
                   type="button"
+                  aria-pressed={mode === "expense"}
                   variant={mode === "expense" ? "destructive" : "outline"}
                   className="flex-1"
                   onClick={() => { setMode("expense"); setCategory(""); }}
@@ -215,6 +219,7 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
                 </Button>
                 <Button
                   type="button"
+                  aria-pressed={mode === "income"}
                   variant={mode === "income" ? "default" : "outline"}
                   className={`flex-1 ${mode === "income" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
                   onClick={() => { setMode("income"); setCategory(""); }}
@@ -223,6 +228,7 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
                 </Button>
                 <Button
                   type="button"
+                  aria-pressed={mode === "recurring"}
                   variant={mode === "recurring" ? "default" : "outline"}
                   className="flex-1"
                   onClick={() => { setMode("recurring"); setCategory(""); }}
@@ -236,10 +242,11 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
           {/* Type toggle - edit mode, no lock */}
           {!lockedType && isEditing && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Type</label>
-              <div className="flex gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Type</span>
+              <div role="group" aria-label="Type" className="flex gap-2">
                 <Button
                   type="button"
+                  aria-pressed={mode === "expense"}
                   variant={mode === "expense" ? "destructive" : "outline"}
                   className="flex-1"
                   onClick={() => { setMode("expense"); setCategory(""); }}
@@ -248,6 +255,7 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
                 </Button>
                 <Button
                   type="button"
+                  aria-pressed={mode === "income"}
                   variant={mode === "income" ? "default" : "outline"}
                   className={`flex-1 ${mode === "income" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
                   onClick={() => { setMode("income"); setCategory(""); }}
@@ -261,10 +269,11 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
           {/* Recurring sub-type */}
           {mode === "recurring" && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Recurring Type</label>
-              <div className="flex gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Recurring Type</span>
+              <div role="group" aria-label="Recurring Type" className="flex gap-2">
                 <Button
                   type="button"
+                  aria-pressed={recurringType === "expense"}
                   variant={recurringType === "expense" ? "destructive" : "outline"}
                   className="flex-1"
                   onClick={() => { setRecurringType("expense"); setCategory(""); }}
@@ -273,6 +282,7 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
                 </Button>
                 <Button
                   type="button"
+                  aria-pressed={recurringType === "income"}
                   variant={recurringType === "income" ? "default" : "outline"}
                   className={`flex-1 ${recurringType === "income" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
                   onClick={() => { setRecurringType("income"); setCategory(""); }}
@@ -285,9 +295,9 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
 
           {/* Category */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">Category</label>
+            <label htmlFor={`${formId}-category`} className="text-sm font-medium text-muted-foreground">Category</label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
+              <SelectTrigger id={`${formId}-category`}>
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
@@ -308,9 +318,9 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
 
           {/* Wallet */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">Wallet</label>
+            <label htmlFor={`${formId}-wallet`} className="text-sm font-medium text-muted-foreground">Wallet</label>
             <Select value={walletId} onValueChange={setWalletId}>
-              <SelectTrigger>
+              <SelectTrigger id={`${formId}-wallet`}>
                 <SelectValue placeholder="Select a wallet" />
               </SelectTrigger>
               <SelectContent>
@@ -328,9 +338,11 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
 
           {/* Amount */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">Amount</label>
+            <label htmlFor={`${formId}-amount`} className="text-sm font-medium text-muted-foreground">Amount</label>
             <Input
+              id={`${formId}-amount`}
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0.01"
               placeholder="0.00"
@@ -343,10 +355,11 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
 
           {/* Description */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">
+            <label htmlFor={`${formId}-description`} className="text-sm font-medium text-muted-foreground">
               Description <span className="text-muted-foreground/50">(optional)</span>
             </label>
             <Input
+              id={`${formId}-description`}
               type="text"
               placeholder={mode === "recurring" ? "e.g. Weekly allowance" : "e.g. Lunch at cafe"}
               value={description}
@@ -358,9 +371,9 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
           {/* Frequency - only for recurring */}
           {mode === "recurring" && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-muted-foreground">Frequency</label>
+              <label htmlFor={`${formId}-frequency`} className="text-sm font-medium text-muted-foreground">Frequency</label>
               <Select value={frequency} onValueChange={(v) => setFrequency(v as RecurrenceFrequency)}>
-                <SelectTrigger>
+                <SelectTrigger id={`${formId}-frequency`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -376,12 +389,13 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
 
           {/* Date / Start Date */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">
+            <label htmlFor={`${formId}-date`} className="text-sm font-medium text-muted-foreground">
               {mode === "recurring" ? "Start Date" : "Date"}
             </label>
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
+                  id={`${formId}-date`}
                   type="button"
                   variant="outline"
                   className="w-full justify-between font-normal"
@@ -409,24 +423,15 @@ const TransactionDialog: React.FC<TransactionDialogProps> = ({
             </Popover>
           </div>
 
-          <DialogFooter className="mt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={!category || !amount || parseFloat(amount) <= 0 || !walletId}
-            >
-              {getSubmitLabel()}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogBody>
+        <FormDialogActions
+          formId={formId}
+          submitLabel={getSubmitLabel()}
+          disabled={!category || !amount || parseFloat(amount) <= 0 || !walletId}
+        />
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 };
 

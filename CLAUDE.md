@@ -51,6 +51,10 @@ On first sign-in, if both local and cloud have data, `useExpenseData` surfaces a
 
 All consuming components (in `src/components/smart/`) receive data through this hook and are unaware of where the data lives.
 
+A pending debounced write is **flushed, not dropped**, when the page is hidden, closed, or the user signs out. A failed cloud write shows an error toast (the account menu says "Cloud sync on", not "Synced", for that reason).
+
+Transfers are two transactions (an expense leg and an income leg) sharing a `transferId`. `transferPartner()` in [`src/types/transaction.ts`](src/types/transaction.ts) finds the other leg (older transfers without `transferId` are paired by date, amount, and wallets). Deleting either leg deletes both, and Undo restores both.
+
 ### Auth state
 
 [`src/context/auth-provider.tsx`](src/context/auth-provider.tsx) exports `AuthProvider` and `useAuth()`. It exposes `{ user, profile, loading }`:
@@ -61,7 +65,8 @@ All consuming components (in `src/components/smart/`) receive data through this 
 ### Firebase client SDK (`src/lib/firebase/`)
 
 All Firebase service access goes through wrappers in this directory — never import from `firebase/*` directly in components:
-- `client.ts` — initializes the Firebase app (singleton)
+- `client.ts` — initializes the Firebase app (singleton). **App Check starts on demand** (`ensureAppCheck`): on the auth pages (`AppCheckActivator`), once a user signs in, and at load **before `getAuth()`** when the browser had a signed-in session (the `expense_tracker_session_hint` flag `AuthProvider` keeps). That early start is required: with App Check enforced, Auth's session re-check on load fails without a token and signs the user out. Guests never load reCAPTCHA (free tier: 10,000 assessments a month), so don't start it at import time.
+- `email-delivery.ts` — `deliverVerificationEmail()` / `deliverPasswordReset()`. Use these, not the raw callables: they fall back to Firebase Auth's built-in emails when the Resend quota is used up.
 - `auth.ts` — auth helpers (`signIn`, `signOut`, `onAuthChange`, etc.)
 - `firestore.ts` — Firestore helpers including `subscribeTrackerState`, `writeTrackerState`, `ensureUserProfile`
 - `storage.ts` — Storage upload/download helpers
@@ -73,8 +78,10 @@ All Firebase service access goes through wrappers in this directory — never im
 ```
 users/{uid}                    # UserProfile doc
 users/{uid}/tracker/state      # TrackerState doc (transactions, wallets, recurring, autosave)
-rateLimits/{bucketId}          # Server-only; clients denied by rules
+rateLimits/{bucketId}          # Server-only; clients denied by rules. TTL on expireAt
 ```
+
+`firestore.indexes.json` exempts the tracker arrays (`transactions`, `recurring`, `wallets`) from indexing (nothing queries them) and sets the `rateLimits.expireAt` TTL. `storage.rules` only allows an owner's `users/{uid}/avatar` image, up to 1 MB.
 
 `TrackerState` (defined in [`src/types/index.ts`](src/types/index.ts)) is a single Firestore document containing all three data arrays. The subcollection keeps the profile doc small and the subscription narrow.
 
@@ -85,17 +92,30 @@ Three callable HTTPS functions, all deployed to `asia-southeast1` (co-located wi
 - `sendVerificationEmail` — generates a Firebase action link and sends branded HTML via Resend
 - `sendPasswordResetEmail` — same pattern
 
+**Email quota fallback** ([`functions/src/lib/email/quota.ts`](functions/src/lib/email/quota.ts)): Resend's free plan allows 100 emails a day. Each send first claims a slot from a global daily budget (90, so spoofed IPs can't drain it) and checks whether Resend recently refused for quota reasons (`rateLimits/email_quota`). Either case tells the client to send Firebase's built-in email instead (`unavailable` with `details.fallback === "firebase"` for verification, `{ fallback: true }` for reset).
+
 Email HTML is pre-built from Handlebars templates in `functions/src/lib/email/templates/` using mailwind (Tailwind v3 inline styles). Run `npm run generate:emails` inside `functions/` to rebuild `generated-templates.ts` after changing `.hbs` files.
 
 ### UI components
 
 - `src/components/ui/` — shadcn/ui primitives (auto-generated; edit with care)
 - `src/components/smart/` — business-logic components (dialogs, lists, analytics, export)
+- `src/components/shared/` — generic building blocks (responsive dialog/menu, bottom tab bar, floating Add button)
 - `src/components/dom/` — third-party wrappers (Ko-fi button)
+
+**Phones (below `md`; desktop is unchanged):**
+- **Overlays:** tasks (forms, menus, pickers) open as bottom sheets via `shared/responsive-dialog.tsx` and `shared/responsive-menu.tsx` (vaul drawer on phones, Radix dialog/dropdown from `md` up). Form footers use `shared/form-dialog-actions.tsx` (primary first in a sheet). Confirmations stay `AlertDialog`s.
+- **Shell:** `page.tsx` hides the top tabs and shows `BottomTabBar` plus a section-specific `FloatingAddButton` (none on Analytics). The section lives in `?tab=` (`hooks/use-url-tab.ts`). The `viewport` export sets `viewportFit: "cover"` for the safe-area padding, and toasts sit above the bar via `--toast-bottom` in `globals.css`.
+- **Rows:** tapping a transaction or recurring row opens its action sheet; the inline buttons are `md` and up only. Deleting a transaction is immediate with an Undo toast.
+- **Touch targets:** icon buttons are 40px on phones (`max-md:size-10`).
+
+**Money:** `formatCurrency` shows pesos (`₱1,234.50`), `formatCompactCurrency` is for chart axes (`₱12.5K`), and `formatAmount` is the plain number the copy button copies. Amount inputs use `inputMode="decimal"`.
+
+**Loading:** Analytics (recharts), Excel export (`xlsx-js-style`), and the QR dialog are loaded on first use. The service worker precaches only the `/` shell; other assets are cached as they're used (`pwa-register.tsx` hands the worker the files the page already loaded, so offline works after the first visit). It never reloads the page when the connection returns.
 
 ### Environment variables
 
-Copy `.env.local.example` → `.env.local` for frontend Firebase config. Copy `functions/.env.example` → `functions/.env` for Resend + email config. The `NEXT_PUBLIC_APP_VERSION` env var is injected from `package.json` at build time via `next.config.ts`.
+Copy `.env.local.example` → `.env.local` for frontend Firebase config. Copy `functions/.env.example` → `functions/.env` for Resend + email config. The `NEXT_PUBLIC_APP_VERSION` env var is injected from `package.json` at build time via `next.config.ts`. To run the Firebase CLI locally, copy `.firebaserc.example` → `.firebaserc` and set your project ID (`.firebaserc` is gitignored; CI deploys with `--project`).
 
 ### Deployment
 
