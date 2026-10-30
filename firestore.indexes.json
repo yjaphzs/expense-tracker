@@ -21,6 +21,16 @@
       "collectionGroup": "tracker",
       "fieldPath": "wallets",
       "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "budgets",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "categories",
+      "indexes": []
     }
   ]
 }

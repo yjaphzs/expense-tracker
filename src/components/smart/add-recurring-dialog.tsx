@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useId } from "react";
+"use client";
+
+import { useEffect, useId, useState, type FormEvent } from "react";
+
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -7,329 +10,110 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/shared/responsive-dialog";
+import { DatePickerField } from "@/components/shared/date-picker-field";
 import { FormDialogActions } from "@/components/shared/form-dialog-actions";
-import { Button } from "@/components/ui/button";
+import { EndsField } from "@/components/smart/form/ends-field";
+import { AmountInput, Field } from "@/components/smart/form/field";
+import { CategorySelect, FrequencySelect, WalletSelect } from "@/components/smart/form/form-selects";
+import { EXPENSE_INCOME, TypeToggle } from "@/components/smart/form/type-toggle";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { CalendarIcon, BanknoteIcon, CreditCardIcon } from "lucide-react";
-import { getCategoryIcon } from "@/lib/category-icons";
-import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  type TransactionType,
-  type RecurrenceFrequency,
-  type RecurringTransaction,
-  type Wallet,
-} from "@/types/transaction";
+import { useTracker } from "@/context/tracker-context";
+import { todayStr } from "@/lib/recurring-schedule";
+import type { RecurrenceFrequency, TransactionType } from "@/types/transaction";
 
-const FREQUENCY_OPTIONS: { value: RecurrenceFrequency; label: string }[] = [
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Every 2 Weeks" },
-  { value: "monthly", label: "Monthly" },
-];
+/** Edit a recurring item (new ones are added from the transaction form). */
+export default function EditRecurringDialog() {
+  const { data, dialogs, actions } = useTracker();
+  const { open, editing } = dialogs.recurring;
+  const id = useId();
 
-interface AddRecurringDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onAdd: (
-    data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">
-  ) => void;
-  onEdit?: (
-    id: string,
-    data: Omit<RecurringTransaction, "id" | "lastProcessedDate" | "enabled">
-  ) => void;
-  wallets: Wallet[];
-  editingRecurring?: RecurringTransaction | null;
-}
-
-const AddRecurringDialog: React.FC<AddRecurringDialogProps> = ({
-  open,
-  onOpenChange,
-  onAdd,
-  onEdit,
-  wallets,
-  editingRecurring,
-}) => {
-  const isEditing = !!editingRecurring;
-  const formId = useId();
   const [type, setType] = useState<TransactionType>("expense");
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [frequency, setFrequency] = useState<RecurrenceFrequency>("monthly");
-  const [walletId, setWalletId] = useState(() => wallets[0]?.id ?? "");
-  const [startDate, setStartDate] = useState<Date>(() => new Date());
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
-  const [calendarOpen, setCalendarOpen] = useState(false);
-
-  const resetForm = useCallback(() => {
-    setType("expense");
-    setCategory("");
-    setAmount("");
-    setDescription("");
-    setFrequency("monthly");
-    setWalletId(wallets[0]?.id ?? "");
-    setStartDate(new Date());
-    setCalendarMonth(new Date());
-    setCalendarOpen(false);
-  }, [wallets]);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState<string | undefined>(undefined);
+  const [walletId, setWalletId] = useState("");
 
   useEffect(() => {
-    if (open && editingRecurring) {
-      setType(editingRecurring.type);
-      setCategory(editingRecurring.category);
-      setAmount(String(editingRecurring.amount));
-      setDescription(editingRecurring.description);
-      setFrequency(editingRecurring.frequency);
-      setWalletId(editingRecurring.walletId);
-      const d = new Date(editingRecurring.startDate + "T00:00:00");
-      setStartDate(d);
-      setCalendarMonth(d);
-    } else if (open) {
-      resetForm();
-    }
-  }, [open, editingRecurring, resetForm]);
+    if (!open || !editing) return;
+    setType(editing.type);
+    setCategory(editing.category);
+    setAmount(String(editing.amount));
+    setDescription(editing.description);
+    setFrequency(editing.frequency);
+    setStartDate(editing.startDate);
+    setEndDate(editing.endDate);
+    setWalletId(editing.walletId);
+  }, [open, editing]);
 
-  const categories =
-    type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  const parsedAmount = parseFloat(amount);
+  const valid = !!category && !!walletId && parsedAmount > 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsedAmount = parseFloat(amount);
-    if (!category || isNaN(parsedAmount) || parsedAmount <= 0 || !walletId) return;
-
-    const toDateStr = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    };
-
-    if (isEditing && onEdit) {
-      onEdit(editingRecurring.id, {
-        type,
-        category,
-        amount: parsedAmount,
-        description: description.trim(),
-        frequency,
-        startDate: toDateStr(startDate),
-        walletId,
-      });
-    } else {
-      onAdd({
-        type,
-        category,
-        amount: parsedAmount,
-        description: description.trim(),
-        frequency,
-        startDate: toDateStr(startDate),
-        walletId,
-      });
-    }
-    resetForm();
-    onOpenChange(false);
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!valid || !editing) return;
+    actions.editRecurring(editing.id, {
+      type,
+      category,
+      amount: parsedAmount,
+      description: description.trim(),
+      frequency,
+      startDate,
+      endDate,
+      walletId,
+    });
+    dialogs.setRecurringOpen(false);
   };
 
-  const isValid = category && amount && parseFloat(amount) > 0 && walletId;
-
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={dialogs.setRecurringOpen}>
       <ResponsiveDialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl">
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{isEditing ? "Edit Recurring Transaction" : "Add Recurring Transaction"}</ResponsiveDialogTitle>
-          <ResponsiveDialogDescription>
-            {isEditing ? "Update the details of this recurring transaction." : "Set up automatic transactions that repeat on a schedule."}
-          </ResponsiveDialogDescription>
+          <ResponsiveDialogTitle>Edit Recurring Transaction</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>Update the details of this recurring transaction.</ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogBody>
-        <form id={formId} onSubmit={handleSubmit} className="grid gap-4">
-          {/* Type toggle */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Type</span>
-            <div role="group" aria-label="Type" className="flex gap-2">
-              <Button
-                type="button"
-                aria-pressed={type === "expense"}
-                variant={type === "expense" ? "destructive" : "outline"}
-                className="flex-1"
-                onClick={() => {
-                  setType("expense");
-                  setCategory("");
-                }}
-              >
-                Expense
-              </Button>
-              <Button
-                type="button"
-                aria-pressed={type === "income"}
-                variant={type === "income" ? "default" : "outline"}
-                className={`flex-1 ${type === "income" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
-                onClick={() => {
-                  setType("income");
-                  setCategory("");
-                }}
-              >
-                Income
-              </Button>
-            </div>
-          </div>
-
-          {/* Category */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${formId}-category`} className="text-sm font-medium">Category</label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger id={`${formId}-category`}>
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => {
-                  const Icon = getCategoryIcon(cat);
-                  return (
-                    <SelectItem key={cat} value={cat}>
-                      <span className="flex items-center gap-2">
-                        <Icon className="size-4" />
-                        {cat}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Wallet */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${formId}-wallet`} className="text-sm font-medium">Wallet</label>
-            <Select value={walletId} onValueChange={setWalletId}>
-              <SelectTrigger id={`${formId}-wallet`}>
-                <SelectValue placeholder="Select a wallet" />
-              </SelectTrigger>
-              <SelectContent>
-                {wallets.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    <span className="flex items-center gap-2">
-                      {w.type === "cash" ? <BanknoteIcon className="size-4" /> : <CreditCardIcon className="size-4" />}
-                      {w.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Amount */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${formId}-amount`} className="text-sm font-medium">Amount</label>
-            <Input
-              id={`${formId}-amount`}
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0.01"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-              className="font-mono"
+          <form id={id} onSubmit={onSubmit} className="grid gap-4">
+            <TypeToggle
+              label="Type"
+              value={type}
+              options={EXPENSE_INCOME}
+              onChange={(next) => {
+                setType(next);
+                setCategory("");
+              }}
             />
-          </div>
-
-          {/* Description */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${formId}-description`} className="text-sm font-medium">
-              Description{" "}
-              <span className="text-muted-foreground/50">(optional)</span>
-            </label>
-            <Input
-              id={`${formId}-description`}
-              type="text"
-              placeholder="e.g. Weekly allowance from parents"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={100}
-            />
-          </div>
-
-          {/* Frequency */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${formId}-frequency`} className="text-sm font-medium">Frequency</label>
-            <Select value={frequency} onValueChange={(v) => setFrequency(v as RecurrenceFrequency)}>
-              <SelectTrigger id={`${formId}-frequency`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FREQUENCY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Start Date */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`${formId}-date`} className="text-sm font-medium">Start Date</label>
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  id={`${formId}-date`}
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-between font-normal"
-                >
-                  <span className={startDate ? "" : "text-muted-foreground"}>
-                    {startDate
-                      ? startDate.toLocaleDateString("en-US", {
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })
-                      : "Pick a date"}
-                  </span>
-                  <CalendarIcon className="size-4 text-muted-foreground" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto overflow-hidden p-0" align="start" sideOffset={8}>
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  month={calendarMonth}
-                  onMonthChange={setCalendarMonth}
-                  onSelect={(d) => {
-                    if (d) {
-                      setStartDate(d);
-                      setCalendarOpen(false);
-                    }
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-        </form>
+            <Field id={`${id}-category`} label="Category">
+              <CategorySelect id={`${id}-category`} type={type} value={category} onChange={setCategory} />
+            </Field>
+            <Field id={`${id}-wallet`} label="Wallet">
+              <WalletSelect id={`${id}-wallet`} wallets={data.wallets} value={walletId} onChange={setWalletId} />
+            </Field>
+            <Field id={`${id}-amount`} label="Amount">
+              <AmountInput id={`${id}-amount`} value={amount} onChange={setAmount} />
+            </Field>
+            <Field id={`${id}-description`} label="Description" optional>
+              <Input
+                id={`${id}-description`}
+                placeholder="e.g. Weekly allowance from parents"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={100}
+              />
+            </Field>
+            <Field id={`${id}-frequency`} label="Frequency">
+              <FrequencySelect id={`${id}-frequency`} value={frequency} onChange={setFrequency} />
+            </Field>
+            <Field id={`${id}-date`} label="Start Date">
+              <DatePickerField id={`${id}-date`} value={startDate} onChange={setStartDate} />
+            </Field>
+            <EndsField id={`${id}-ends`} startDate={startDate} frequency={frequency} value={endDate} onChange={setEndDate} />
+          </form>
         </ResponsiveDialogBody>
-        <FormDialogActions
-          formId={formId}
-          submitLabel={isEditing ? "Save Changes" : "Save"}
-          disabled={!isValid}
-        />
+        <FormDialogActions formId={id} submitLabel="Save Changes" disabled={!valid} />
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   );
-};
-
-export default AddRecurringDialog;
+}

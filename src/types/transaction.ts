@@ -101,4 +101,25 @@ export interface RecurringTransaction {
   lastProcessedDate: string | null;
   enabled: boolean;
   walletId: string;
+  /** Last date it may add a transaction on ("YYYY-MM-DD"). Omitted: repeats forever. */
+  endDate?: string;
+}
+
+/**
+ * A monthly spending limit. Without `category` it caps the whole month's
+ * expenses; with one, just that expense category. Transfers never count.
+ */
+export interface Budget {
+  id: string;
+  category?: string;
+  amount: number;
+}
+
+/** A category the user added on top of the built-in lists. */
+export interface CustomCategory {
+  id: string;
+  name: string;
+  type: TransactionType;
+  /** Key into CATEGORY_ICON_CHOICES (src/lib/categories.ts). */
+  icon: string;
 }

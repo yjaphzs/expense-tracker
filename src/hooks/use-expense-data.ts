@@ -1,533 +1,127 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
-
-import { toast } from "sonner";
+import { useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
 
 import { useAuth } from "@/context/auth-provider";
-import { useLocalStorage } from "@/hooks/use-local-storage";
-import {
-  subscribeTrackerState,
-  writeTrackerState,
-} from "@/lib/firebase/firestore";
-import type {
-  Transaction,
-  Wallet,
-  RecurringTransaction,
-  TrackerState,
-} from "@/types";
-import { DEFAULT_WALLETS } from "@/types/transaction";
+import { useCloudTrackerStore, type MergeConflict } from "@/hooks/use-cloud-tracker-store";
+import { useCloudWriter } from "@/hooks/use-cloud-writer";
+import { useGuestTrackerStore } from "@/hooks/use-guest-tracker-store";
+import { markReconciled } from "@/lib/reconciled";
+import { setSyncRetry, setSyncState } from "@/lib/sync-status";
+import { defaultGuestState, mergeStates, type TrackerField } from "@/lib/tracker-state";
+import type { TrackerState } from "@/types";
 
-const TRANSACTIONS_KEY =
-  process.env.NEXT_PUBLIC_APP_LOCAL_STORAGE_TRANSACTIONS_KEY ||
-  "expense_tracker_transactions";
-const RECURRING_KEY =
-  process.env.NEXT_PUBLIC_APP_LOCAL_STORAGE_RECURRING_KEY ||
-  "expense_tracker_recurring";
-const WALLETS_KEY =
-  process.env.NEXT_PUBLIC_APP_LOCAL_STORAGE_WALLETS_KEY ||
-  "expense-tracker-wallets";
-const AUTOSAVE_KEY =
-  process.env.NEXT_PUBLIC_APP_LOCAL_STORAGE_AUTOSAVE_KEY ||
-  "expense_tracker_autosave";
+export type { MergeConflict };
 
-// Debounce window for cloud writes — coalesces rapid edits into one write.
-const CLOUD_WRITE_DEBOUNCE_MS = 600;
+type Setter<K extends TrackerField> = Dispatch<SetStateAction<TrackerState[K]>>;
 
-// Per-account flag (localStorage) marking that the one-time local↔cloud
-// reconciliation has already happened on this device, so the merge prompt is
-// never shown again for this account on this browser.
-const RECONCILED_KEY_PREFIX = "expense_tracker_reconciled_";
-
-function isReconciled(uid: string): boolean {
-  try {
-    return localStorage.getItem(RECONCILED_KEY_PREFIX + uid) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function markReconciled(uid: string): void {
-  try {
-    localStorage.setItem(RECONCILED_KEY_PREFIX + uid, "true");
-  } catch {
-    /* ignore */
-  }
-}
-
-export interface MergeConflict {
-  local: TrackerState;
-  cloud: TrackerState;
-}
-
-export interface UseExpenseData {
-  transactions: Transaction[];
-  setTransactions: Dispatch<SetStateAction<Transaction[]>>;
-  recurring: RecurringTransaction[];
-  setRecurring: Dispatch<SetStateAction<RecurringTransaction[]>>;
-  wallets: Wallet[];
-  setWallets: Dispatch<SetStateAction<Wallet[]>>;
-  autosave: boolean;
-  setAutosave: Dispatch<SetStateAction<boolean>>;
+export interface UseExpenseData extends TrackerState {
+  setTransactions: Setter<"transactions">;
+  setRecurring: Setter<"recurring">;
+  setWallets: Setter<"wallets">;
+  setBudgets: Setter<"budgets">;
+  setCategories: Setter<"categories">;
+  setAutosave: Setter<"autosave">;
   /** Replace the entire state at once (import / QR transfer / merge). */
   replaceAll: (state: TrackerState) => void;
   /** Force-persist the current state to the active store right now (Save). */
   persistNow: () => void;
-  /** Reset everything (transactions, recurring → empty; wallets → default). */
+  /** Reset everything: no transactions, recurring, budgets or categories; one Cash wallet. */
   removeAll: () => void;
-  /**
-   * True while the initial data is loading — auth is still resolving, or (when
-   * signed in) the first cloud snapshot hasn't arrived yet. Use it to show a
-   * loader instead of flashing an empty state on reload.
-   */
+  /** Auth is resolving, or (signed in) the first cloud snapshot hasn't arrived. */
   loading: boolean;
-  /** True while signed in (data is backed by the cloud, not localStorage). */
+  /** Signed in: data is backed by Firestore, not localStorage. */
   isCloud: boolean;
   /** Pending first-sign-in conflict between local and cloud data, if any. */
   pendingMerge: MergeConflict | null;
   resolveMerge: (choice: "merge" | "cloud" | "local") => void;
 }
 
-/** A lone default Cash wallet doesn't count as "real" data worth reconciling. */
-function hasData(s: TrackerState): boolean {
-  return (
-    s.transactions.length > 0 ||
-    s.recurring.length > 0 ||
-    s.wallets.some((w) => w.id !== "cash")
-  );
-}
-
-/** Any content at all, including a lone default wallet — used to decide whether
- * to seed a brand-new (empty) cloud account from local rather than start blank. */
-function isNonEmpty(s: TrackerState): boolean {
-  return (
-    s.transactions.length > 0 ||
-    s.recurring.length > 0 ||
-    s.wallets.length > 0
-  );
-}
-
-function sameState(a: TrackerState, b: TrackerState): boolean {
-  return (
-    JSON.stringify(a.transactions) === JSON.stringify(b.transactions) &&
-    JSON.stringify(a.recurring) === JSON.stringify(b.recurring) &&
-    JSON.stringify(a.wallets) === JSON.stringify(b.wallets)
-  );
-}
-
-function byId<T extends { id: string }>(local: T[], cloud: T[]): T[] {
-  const map = new Map<string, T>();
-  // Cloud first, then local overrides — local is what the user sees right now.
-  for (const item of cloud) map.set(item.id, item);
-  for (const item of local) map.set(item.id, item);
-  return [...map.values()];
-}
-
-function mergeStates(local: TrackerState, cloud: TrackerState): TrackerState {
-  return {
-    transactions: byId(local.transactions, cloud.transactions),
-    recurring: byId(local.recurring, cloud.recurring),
-    wallets: byId(local.wallets, cloud.wallets),
-    autosave: cloud.autosave,
-  };
-}
-
 /**
- * Unified persistence for the expense tracker. When signed out, data lives in
- * localStorage (unchanged guest behavior). When signed in, data lives in
- * Firestore with live sync + debounced writes, and a one-time merge prompt
- * reconciles any conflicting local data on first sign-in.
+ * Unified persistence. Signed out, data lives in localStorage
+ * (use-guest-tracker-store); signed in, in Firestore with live sync and
+ * debounced writes (use-cloud-tracker-store + use-cloud-writer). Components get
+ * the same useState-like API either way.
  */
 export function useExpenseData(): UseExpenseData {
   const { user, loading: authLoading } = useAuth();
   const uid = user?.uid ?? null;
 
-  // ── Guest store (localStorage) — also the merge source on first login. ─────
-  const [lsAutosave, setLsAutosave] = useLocalStorage<boolean>(
-    AUTOSAVE_KEY,
-    true,
-    { enabled: true },
-  );
-  const [lsTransactions, setLsTransactions] = useLocalStorage<Transaction[]>(
-    TRANSACTIONS_KEY,
-    [],
-    { enabled: lsAutosave },
-  );
-  const [lsRecurring, setLsRecurring] = useLocalStorage<RecurringTransaction[]>(
-    RECURRING_KEY,
-    [],
-    { enabled: lsAutosave },
-  );
-  const [lsWallets, setLsWallets] = useLocalStorage<Wallet[]>(
-    WALLETS_KEY,
-    DEFAULT_WALLETS,
-    { enabled: lsAutosave },
-  );
+  const guest = useGuestTrackerStore();
+  const writer = useCloudWriter(uid);
+  const cloud = useCloudTrackerStore(uid, guest.stateRef, writer);
+  const { writeNow, cancel, uidRef } = writer;
+  const { replace: guestReplace, persist: guestPersist, stateRef: guestRef } = guest;
 
-  // ── Cloud store ────────────────────────────────────────────────────────────
-  const [cloud, setCloud] = useState<TrackerState>({
-    transactions: [],
-    recurring: [],
-    wallets: [],
-    autosave: true,
-  });
-  const [pendingMerge, setPendingMerge] = useState<MergeConflict | null>(null);
-  // Whether the first cloud snapshot has arrived (only meaningful when signed in).
-  const [cloudReady, setCloudReady] = useState(false);
+  const setField = uid ? cloud.setField : guest.setField;
+  const setTransactions = useCallback<Setter<"transactions">>((v) => setField("transactions", v), [setField]);
+  const setRecurring = useCallback<Setter<"recurring">>((v) => setField("recurring", v), [setField]);
+  const setWallets = useCallback<Setter<"wallets">>((v) => setField("wallets", v), [setField]);
+  const setBudgets = useCallback<Setter<"budgets">>((v) => setField("budgets", v), [setField]);
+  const setCategories = useCallback<Setter<"categories">>((v) => setField("categories", v), [setField]);
+  const setAutosave = useCallback<Setter<"autosave">>((v) => setField("autosave", v), [setField]);
 
-  // Latest localStorage values, readable inside the subscription callback
-  // without making it a dependency (which would re-subscribe on every edit).
-  const lsRef = useRef<TrackerState>({
-    transactions: lsTransactions,
-    recurring: lsRecurring,
-    wallets: lsWallets,
-    autosave: lsAutosave,
-  });
-  useEffect(() => {
-    lsRef.current = {
-      transactions: lsTransactions,
-      recurring: lsRecurring,
-      wallets: lsWallets,
-      autosave: lsAutosave,
-    };
-  }, [lsTransactions, lsRecurring, lsWallets, lsAutosave]);
-
-  const cloudRef = useRef<TrackerState>(cloud);
-  useEffect(() => {
-    cloudRef.current = cloud;
-  }, [cloud]);
-
-  const autosaveRef = useRef(true);
-  useEffect(() => {
-    autosaveRef.current = uid ? cloud.autosave : lsAutosave;
-  }, [uid, cloud.autosave, lsAutosave]);
-
-  const cloudInitedRef = useRef(false);
-  const writeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const uidRef = useRef<string | null>(uid);
-  useEffect(() => {
-    uidRef.current = uid;
-  }, [uid]);
-
-  // Every cloud write goes through here. A failure is shown to the user (not
-  // just logged) unless they've since signed out or switched accounts.
-  const writeCloud = useCallback(
-    (targetUid: string, payload: Partial<TrackerState>, label: string) => {
-      writeTrackerState(targetUid, payload).catch((err) => {
-        console.error(`[useExpenseData] ${label} failed:`, err);
-        if (uidRef.current !== targetUid) return;
-        toast.error("Couldn't save to your account", {
-          id: "cloud-write-error",
-          description: "Your latest changes are on this device only. Check your connection and try again.",
-        });
-      });
-    },
-    [],
-  );
-
-  // The debounced write waiting to go out. Kept so it can be flushed (on
-  // unmount, account change, or the tab going to the background) instead of
-  // being dropped when the timer is cancelled.
-  const pendingWriteRef = useRef<{ uid: string; payload: Partial<TrackerState> } | null>(null);
-
-  const flushCloudWrite = useCallback(() => {
-    if (writeTimerRef.current) {
-      clearTimeout(writeTimerRef.current);
-      writeTimerRef.current = null;
-    }
-    const pending = pendingWriteRef.current;
-    pendingWriteRef.current = null;
-    if (pending) writeCloud(pending.uid, pending.payload, "cloud write");
-  }, [writeCloud]);
-
-  /** Explicit writes carry the full state, so any queued debounced write is moot. */
-  const cancelPendingWrite = useCallback(() => {
-    if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
-    writeTimerRef.current = null;
-    pendingWriteRef.current = null;
-  }, []);
-
-  // Persist a state to the cloud (debounced). When autosave is off, only the
-  // flag is written so the cloud keeps its last saved arrays (mirrors guest).
-  const scheduleCloudWrite = useCallback(
-    (next: TrackerState) => {
-      const currentUid = uidRef.current;
-      if (!currentUid) return;
-      pendingWriteRef.current = {
-        uid: currentUid,
-        payload: next.autosave ? next : { autosave: next.autosave },
-      };
-      if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
-      writeTimerRef.current = setTimeout(flushCloudWrite, CLOUD_WRITE_DEBOUNCE_MS);
-    },
-    [flushCloudWrite],
-  );
-
-  // Phones often background or close the tab right after an edit: send the
-  // queued write before that happens.
-  useEffect(() => {
-    const onHide = () => {
-      if (document.visibilityState === "hidden") flushCloudWrite();
-    };
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", flushCloudWrite);
-    return () => {
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", flushCloudWrite);
-    };
-  }, [flushCloudWrite]);
-
-  // ── Cloud subscription (per signed-in user) ────────────────────────────────
-  useEffect(() => {
-    setCloudReady(false);
-    // Reset per-account state on EVERY account change (including a direct switch
-    // between two signed-in users), so the next user's first snapshot always
-    // runs reconciliation and flips cloudReady true (otherwise the app would
-    // hang on the loading screen), and a stale merge prompt from the previous
-    // account can't resolve against the new one.
-    cloudInitedRef.current = false;
-    setPendingMerge(null);
-    if (!uid) {
-      return;
-    }
-
-    const unsub = subscribeTrackerState(uid, (incoming, meta) => {
-      if (!cloudInitedRef.current) {
-        cloudInitedRef.current = true;
-        setCloudReady(true);
-        const local = lsRef.current;
-
-        // Already reconciled on this device → adopt cloud, never prompt again.
-        if (isReconciled(uid)) {
-          setCloud(incoming);
-          return;
-        }
-
-        if (hasData(incoming) && hasData(local) && !sameState(local, incoming)) {
-          // Conflict — ask the user how to reconcile.
-          setPendingMerge({ local, cloud: incoming });
-          setCloud(incoming);
-        } else if (!isNonEmpty(incoming) && isNonEmpty(local)) {
-          // Fresh (empty) account — seed it from local so the user keeps their
-          // guest data, including the default wallet, instead of starting blank.
-          setCloud(local);
-          writeCloud(uid, local, "initial push");
-          markReconciled(uid);
-        } else {
-          // No conflict (cloud has data and local matches/empty, or both empty).
-          setCloud(incoming);
-          markReconciled(uid);
-        }
-        return;
-      }
-
-      // Subsequent live updates — real-time sync from OTHER devices. Skip the
-      // echo of our own pending local writes (latency compensation).
-      if (meta.hasPendingWrites) return;
-
-      // Keep in-memory arrays when autosave is off.
-      setCloud((prev) => ({
-        transactions: autosaveRef.current ? incoming.transactions : prev.transactions,
-        recurring: autosaveRef.current ? incoming.recurring : prev.recurring,
-        wallets: autosaveRef.current ? incoming.wallets : prev.wallets,
-        autosave: incoming.autosave,
-      }));
-    }, (err) => {
-      // Snapshot error (e.g. rules not deployed / offline). Unblock the UI
-      // instead of hanging on the loading screen forever; leave cloudInited
-      // false so a recovered snapshot can still reconcile.
-      console.error("[useExpenseData] tracker subscription error:", err);
-      setCloudReady(true);
-    });
-
-    return () => {
-      unsub();
-      // Send (don't drop) an edit made just before leaving the page or
-      // switching accounts.
-      flushCloudWrite();
-    };
-  }, [uid, writeCloud, flushCloudWrite]);
-
-  // ── Cloud setters (mirror the useState dispatcher API) ─────────────────────
-  const cloudSetTransactions = useCallback<
-    Dispatch<SetStateAction<Transaction[]>>
-  >(
-    (value) => {
-      setCloud((prev) => {
-        const transactions =
-          typeof value === "function"
-            ? (value as (p: Transaction[]) => Transaction[])(prev.transactions)
-            : value;
-        const next = { ...prev, transactions };
-        scheduleCloudWrite(next);
-        return next;
-      });
-    },
-    [scheduleCloudWrite],
-  );
-
-  const cloudSetRecurring = useCallback<
-    Dispatch<SetStateAction<RecurringTransaction[]>>
-  >(
-    (value) => {
-      setCloud((prev) => {
-        const recurring =
-          typeof value === "function"
-            ? (value as (p: RecurringTransaction[]) => RecurringTransaction[])(
-                prev.recurring,
-              )
-            : value;
-        const next = { ...prev, recurring };
-        scheduleCloudWrite(next);
-        return next;
-      });
-    },
-    [scheduleCloudWrite],
-  );
-
-  const cloudSetWallets = useCallback<Dispatch<SetStateAction<Wallet[]>>>(
-    (value) => {
-      setCloud((prev) => {
-        const wallets =
-          typeof value === "function"
-            ? (value as (p: Wallet[]) => Wallet[])(prev.wallets)
-            : value;
-        const next = { ...prev, wallets };
-        scheduleCloudWrite(next);
-        return next;
-      });
-    },
-    [scheduleCloudWrite],
-  );
-
-  const cloudSetAutosave = useCallback<Dispatch<SetStateAction<boolean>>>(
-    (value) => {
-      setCloud((prev) => {
-        const autosave =
-          typeof value === "function"
-            ? (value as (p: boolean) => boolean)(prev.autosave)
-            : value;
-        const next = { ...prev, autosave };
-        scheduleCloudWrite(next);
-        return next;
-      });
-    },
-    [scheduleCloudWrite],
-  );
-
-  // ── replaceAll / persistNow / removeAll ─────────────────────────────────────
-  const writeGuest = useCallback((state: TrackerState) => {
-    // Force-persist regardless of the autosave gate (import / QR / save / reset).
-    try {
-      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(state.transactions));
-      localStorage.setItem(RECURRING_KEY, JSON.stringify(state.recurring));
-      localStorage.setItem(WALLETS_KEY, JSON.stringify(state.wallets));
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state.autosave));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
+  const { apply, cloudRef, setPendingMerge } = cloud;
   const replaceAll = useCallback(
     (state: TrackerState) => {
-      if (uidRef.current) {
-        setCloud(state);
-        cancelPendingWrite();
-        writeCloud(uidRef.current, state, "replaceAll");
-      } else {
-        setLsAutosave(state.autosave);
-        setLsTransactions(state.transactions);
-        setLsRecurring(state.recurring);
-        setLsWallets(state.wallets);
-        writeGuest(state);
-      }
+      const currentUid = uidRef.current;
+      if (!currentUid) return guestReplace(state);
+      apply(state);
+      cancel();
+      writeNow(currentUid, state, "replaceAll");
     },
-    [setLsAutosave, setLsTransactions, setLsRecurring, setLsWallets, writeGuest, cancelPendingWrite, writeCloud],
+    [uidRef, guestReplace, apply, cancel, writeNow],
   );
 
   const persistNow = useCallback(() => {
-    if (uidRef.current) {
-      cancelPendingWrite();
-      writeCloud(uidRef.current, cloudRef.current, "persistNow");
-    } else {
-      writeGuest(lsRef.current);
-    }
-  }, [writeGuest, cancelPendingWrite, writeCloud]);
+    const currentUid = uidRef.current;
+    if (!currentUid) return guestPersist();
+    cancel();
+    writeNow(currentUid, cloudRef.current, "persistNow");
+  }, [uidRef, guestPersist, cancel, writeNow, cloudRef]);
 
   const removeAll = useCallback(() => {
-    const reset: TrackerState = {
-      transactions: [],
-      recurring: [],
-      // Clone so the in-memory/persisted state never aliases the shared constant.
-      wallets: DEFAULT_WALLETS.map((w) => ({ ...w })),
-      autosave: uidRef.current ? cloudRef.current.autosave : lsRef.current.autosave,
-    };
-    replaceAll(reset);
-  }, [replaceAll]);
+    const autosave = uidRef.current ? cloudRef.current.autosave : guestRef.current.autosave;
+    replaceAll({ ...defaultGuestState(), autosave });
+  }, [uidRef, cloudRef, guestRef, replaceAll]);
 
-  const resolveMerge = useCallback((choice: "merge" | "cloud" | "local") => {
-    setPendingMerge((conflict) => {
-      if (!conflict || !uidRef.current) return null;
+  const resolveMerge = useCallback(
+    (choice: "merge" | "cloud" | "local") => {
+      const conflict = cloud.pendingMerge;
+      const currentUid = uidRef.current;
+      setPendingMerge(null);
+      if (!conflict || !currentUid) return;
       const result =
-        choice === "local"
-          ? conflict.local
-          : choice === "cloud"
-            ? conflict.cloud
-            : mergeStates(conflict.local, conflict.cloud);
-      setCloud(result);
-      writeCloud(uidRef.current, result, "merge resolve");
-      markReconciled(uidRef.current);
-      return null;
-    });
-  }, [writeCloud]);
+        choice === "local" ? conflict.local : choice === "cloud" ? conflict.cloud : mergeStates(conflict.local, conflict.cloud);
+      apply(result);
+      writeNow(currentUid, result, "merge resolve");
+      markReconciled(currentUid);
+    },
+    [cloud.pendingMerge, uidRef, setPendingMerge, apply, writeNow],
+  );
 
-  // Loading while auth is still resolving, or (signed in) until the first cloud
-  // snapshot arrives — so the UI can show a loader instead of an empty flash.
-  const loading = authLoading || (uid !== null && !cloudReady);
+  // The account menu's "Try again" re-sends everything; guests have no sync status.
+  useEffect(() => {
+    if (!uid) setSyncState("idle");
+    setSyncRetry(uid ? persistNow : null);
+    return () => setSyncRetry(null);
+  }, [uid, persistNow]);
 
-  // ── Unified facade ─────────────────────────────────────────────────────────
-  if (uid) {
-    return {
-      transactions: cloud.transactions,
-      setTransactions: cloudSetTransactions,
-      recurring: cloud.recurring,
-      setRecurring: cloudSetRecurring,
-      wallets: cloud.wallets,
-      setWallets: cloudSetWallets,
-      autosave: cloud.autosave,
-      setAutosave: cloudSetAutosave,
-      replaceAll,
-      persistNow,
-      removeAll,
-      loading,
-      isCloud: true,
-      pendingMerge,
-      resolveMerge,
-    };
-  }
-
+  const state = uid ? cloud.cloud : guest.state;
   return {
-    transactions: lsTransactions,
-    setTransactions: setLsTransactions,
-    recurring: lsRecurring,
-    setRecurring: setLsRecurring,
-    wallets: lsWallets,
-    setWallets: setLsWallets,
-    autosave: lsAutosave,
-    setAutosave: setLsAutosave,
+    ...state,
+    setTransactions,
+    setRecurring,
+    setWallets,
+    setBudgets,
+    setCategories,
+    setAutosave,
     replaceAll,
     persistNow,
     removeAll,
-    loading,
-    isCloud: false,
-    pendingMerge: null,
+    loading: authLoading || (uid !== null && !cloud.cloudReady),
+    isCloud: uid !== null,
+    pendingMerge: uid ? cloud.pendingMerge : null,
     resolveMerge,
   };
 }

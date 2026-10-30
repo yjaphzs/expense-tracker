@@ -1,290 +1,62 @@
-import React, { useId, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogBody,
-  ResponsiveDialogContent,
-  ResponsiveDialogDescription,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/shared/responsive-dialog";
-import { FormDialogActions } from "@/components/shared/form-dialog-actions";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-} from "@/components/ui/empty";
-import {
-  BanknoteIcon,
-  WalletIcon,
-  PlusIcon,
-  Trash2Icon,
-  SettingsIcon,
-  ImportIcon,
-  ChevronUpIcon,
-  ChevronDownIcon
-} from "lucide-react";
-import type { Wallet, WalletType } from "@/types/transaction";
-import { formatCurrency } from "@/lib/utils";
+"use client";
 
-const WALLET_TYPE_ICON: Record<WalletType, React.ReactNode> = {
-  cash: <BanknoteIcon className="size-4" />,
-  "e-wallet-card": <WalletIcon className="size-4" />,
+import { BanknoteIcon, ChevronDownIcon, ChevronUpIcon, SettingsIcon, WalletIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { useTracker } from "@/context/tracker-context";
+import { formatCurrency } from "@/lib/utils";
+import type { WalletType } from "@/types/transaction";
+
+export const WALLET_TYPE_ICON: Record<WalletType, typeof WalletIcon> = {
+  cash: BanknoteIcon,
+  "e-wallet-card": WalletIcon,
 };
 
-interface WalletCardsProps {
-  wallets: Wallet[];
-  walletBalances: Record<string, { income: number; expenses: number; balance: number }>;
-  onAddWallet: (name: string, type: WalletType) => void;
-  onRemoveWallet: (id: string) => void;
-  hasTransactions: (walletId: string) => boolean;
-  manageOpen?: boolean;
-  onManageOpenChange?: (open: boolean) => void;
-  dialogsOnly?: boolean;
-  onImport?: () => void;
-}
-
-const WalletCards: React.FC<WalletCardsProps> = ({
-  wallets,
-  walletBalances,
-  onAddWallet,
-  onRemoveWallet,
-  hasTransactions,
-  manageOpen: manageOpenProp,
-  onManageOpenChange,
-  dialogsOnly = false,
-  onImport,
-}) => {
-  const [manageOpenInternal, setManageOpenInternal] = useState(false);
-  const manageOpen = manageOpenProp ?? manageOpenInternal;
-  const setManageOpen = onManageOpenChange ?? setManageOpenInternal;
-  const formId = useId();
-  const [addOpen, setAddOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<WalletType>("e-wallet-card");
-
-  const handleAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
-    onAddWallet(newName, newType);
-    setNewName("");
-    setNewType("e-wallet-card");
-    setAddOpen(false);
-  };
+/** Home: a card per wallet (balance, income, spending) and the Manage button. */
+export default function WalletCards() {
+  const { data, dialogs } = useTracker();
+  const { wallets, walletBalances } = data;
+  const columns = wallets.length === 1 ? "sm:grid-cols-1" : wallets.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3";
 
   return (
     <>
-      {!dialogsOnly && (
-        <>
-          <div className="flex items-center justify-between mt-6 mb-3">
-            <h2 className="text-lg font-semibold">Wallets</h2>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="max-md:size-10"
-              aria-label="Manage wallets"
-              onClick={() => setManageOpen(true)}
-            >
-              <SettingsIcon className="size-4" />
-            </Button>
-          </div>
-
-          {wallets.length === 0 ? (
-            <Empty className="border border-dashed">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <WalletIcon />
-                </EmptyMedia>
-                <EmptyTitle>No wallets yet</EmptyTitle>
-                <EmptyDescription>
-                  Add a wallet to start tracking your balances separately. You can have different wallets for cash, credit cards, or e-wallets.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <div className="flex flex-row gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-                    <PlusIcon className="size-4" />
-                    Add Wallet
-                  </Button>
-                  {onImport && (
-                    <Button variant="outline" size="sm" onClick={onImport}>
-                      <ImportIcon className="size-4" />
-                      Import Data
-                    </Button>
-                  )}
-                </div>
-              </EmptyContent>
-            </Empty>
-          ) : (
-            <div className={`grid grid-cols-1 gap-3 ${wallets.length === 1 ? "sm:grid-cols-1" : wallets.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
-              {wallets.map((w) => {
-                const bal = walletBalances[w.id] ?? { balance: 0, income: 0, expenses: 0 };
-                return (
-                  <div
-                    key={w.id}
-                    className="flex flex-col gap-1 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
-                  >
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      {WALLET_TYPE_ICON[w.type] ?? <WalletIcon className="size-4" />}
-                      <span className="text-xs font-medium truncate">{w.name}</span>
-                    </div>
-                    <div className="text-lg font-mono font-bold">
-                      {formatCurrency(bal.balance)}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs md:text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
-                        <ChevronUpIcon className="inline-block size-3 mr-1"/>
-                        {formatCurrency(bal.income)}
-                      </span>
-                      <span className="text-xs md:text-[10px] font-mono text-red-600 dark:text-red-400">
-                        <ChevronDownIcon className="inline-block size-3 mr-1"/>
-                        {formatCurrency(bal.expenses)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Manage Wallets Dialog */}
-      <ResponsiveDialog open={manageOpen} onOpenChange={setManageOpen}>
-        <ResponsiveDialogContent>
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>Manage Wallets</ResponsiveDialogTitle>
-            <ResponsiveDialogDescription>
-              Add or remove wallets to track your balances separately.
-            </ResponsiveDialogDescription>
-          </ResponsiveDialogHeader>
-          <ResponsiveDialogBody className="flex flex-col gap-2 md:max-h-64 md:overflow-y-auto">
-            {wallets.map((w) => (
-              <div
-                key={w.id}
-                className="flex items-center justify-between rounded-lg border px-3 py-2"
-              >
-                <div className="flex items-center gap-2">
-                  {WALLET_TYPE_ICON[w.type] ?? <WalletIcon className="size-4" />}
-                  <span className="text-sm font-medium">{w.name}</span>
-                </div>
-                {hasTransactions(w.id) ? (
-                  <Badge variant="outline" className="text-xs md:text-[10px]">In use</Badge>
-                ) : (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="destructive"
-                        size="icon-sm"
-                        className="max-md:size-10"
-                        aria-label={`Delete wallet ${w.name}`}
-                      >
-                        <Trash2Icon className="size-3.5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete wallet?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will remove the "{w.name}" wallet. Wallets with transactions cannot be deleted.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          variant="destructive"
-                          onClick={() => onRemoveWallet(w.id)}
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
+      <div className="mt-6 mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Wallets</h2>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="max-md:size-10"
+          aria-label="Manage wallets"
+          onClick={() => dialogs.setWalletsOpen(true)}
+        >
+          <SettingsIcon className="size-4" />
+        </Button>
+      </div>
+      <div className={`grid grid-cols-1 gap-3 ${columns}`}>
+        {wallets.map((wallet) => {
+          const balance = walletBalances[wallet.id] ?? { balance: 0, income: 0, expenses: 0 };
+          const Icon = WALLET_TYPE_ICON[wallet.type] ?? WalletIcon;
+          return (
+            <div key={wallet.id} className="flex flex-col gap-1 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="size-4" />
+                <span className="truncate text-xs font-medium">{wallet.name}</span>
               </div>
-            ))}
-          </ResponsiveDialogBody>
-          <ResponsiveDialogFooter>
-            <Button variant="outline" className="max-md:h-11" onClick={() => setAddOpen(true)}>
-              <PlusIcon className="size-4" />
-              Add Wallet
-            </Button>
-          </ResponsiveDialogFooter>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
-
-      {/* Add Wallet Dialog */}
-      <ResponsiveDialog open={addOpen} onOpenChange={setAddOpen}>
-        <ResponsiveDialogContent>
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>Add Wallet</ResponsiveDialogTitle>
-            <ResponsiveDialogDescription>
-              Create a new wallet to track a separate balance.
-            </ResponsiveDialogDescription>
-          </ResponsiveDialogHeader>
-          <ResponsiveDialogBody>
-          <form id={formId} onSubmit={handleAdd} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Type</span>
-              <div role="group" aria-label="Type" className="flex gap-2">
-                <Button
-                  type="button"
-                  aria-pressed={newType === "cash"}
-                  variant={newType === "cash" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setNewType("cash")}
-                >
-                  <BanknoteIcon className="size-4" />
-                  Cash
-                </Button>
-                <Button
-                  type="button"
-                  aria-pressed={newType === "e-wallet-card"}
-                  variant={newType === "e-wallet-card" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setNewType("e-wallet-card")}
-                >
-                  <WalletIcon className="size-4" />
-                  E-Wallet / Card
-                </Button>
+              <div className="font-mono text-lg font-bold">{formatCurrency(balance.balance)}</div>
+              <div className="mt-1 flex items-center gap-3">
+                <span className="font-mono text-xs text-emerald-600 md:text-[10px] dark:text-emerald-400">
+                  <ChevronUpIcon className="mr-1 inline-block size-3" />
+                  {formatCurrency(balance.income)}
+                </span>
+                <span className="font-mono text-xs text-red-600 md:text-[10px] dark:text-red-400">
+                  <ChevronDownIcon className="mr-1 inline-block size-3" />
+                  {formatCurrency(balance.expenses)}
+                </span>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <label htmlFor={`${formId}-name`} className="text-sm font-medium text-muted-foreground">Name</label>
-              <Input
-                id={`${formId}-name`}
-                type="text"
-                placeholder={newType === "cash" ? "e.g. Petty Cash" : "e.g. GCash, Maya, BDO Credit Card"}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                maxLength={30}
-                required
-              />
-            </div>
-          </form>
-          </ResponsiveDialogBody>
-          <FormDialogActions formId={formId} submitLabel="Add" disabled={!newName.trim()} />
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
+          );
+        })}
+      </div>
     </>
   );
-};
-
-export default WalletCards;
+}

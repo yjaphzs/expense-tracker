@@ -24,10 +24,15 @@ function plural(n: number, word: string) {
 }
 
 function summarize(label: string, s: TrackerState) {
-  return `${label}: ${plural(s.transactions.length, "transaction")}, ${plural(
-    s.wallets.length,
-    "wallet",
-  )}, ${plural(s.recurring.length, "recurring")}`;
+  const parts = [
+    plural(s.transactions.length, "transaction"),
+    plural(s.wallets.length, "wallet"),
+    plural(s.recurring.length, "recurring"),
+  ];
+  // Budgets and custom categories (2.2.0+) only when there are any.
+  if (s.budgets.length > 0) parts.push(plural(s.budgets.length, "budget"));
+  if (s.categories.length > 0) parts.push(`${s.categories.length} custom ${s.categories.length === 1 ? "category" : "categories"}`);
+  return `${label}: ${parts.join(", ")}`;
 }
 
 export function MergeDialog({ conflict, onResolve }: MergeDialogProps) {

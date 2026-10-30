@@ -11,7 +11,7 @@ export default function PrivacyPolicyPage() {
     <>
       <h1>Privacy Policy</h1>
       <p>
-        <strong>Last updated: June 22, 2026</strong>
+        <strong>Last updated: October 31, 2026</strong>
       </p>
 
       <p>
@@ -142,17 +142,20 @@ export default function PrivacyPolicyPage() {
       <ul>
         <li>Access and edit your profile and saved data within the app.</li>
         <li>
-          Export your data as a JSON backup or a spreadsheet, or transfer it to
-          another device via the in-app QR code feature.
+          Export your data as a JSON backup, a spreadsheet, or a CSV file, print
+          a Summary Report (or save it as a PDF), or transfer your data to another
+          device via the in-app QR code feature.
         </li>
         <li>Delete your account and all associated data.</li>
       </ul>
       <p>
-        Any file you export, and any QR code you generate to transfer data, are
-        created <strong>on your device</strong>, from data already on your
-        device, at the moment you ask for them. The resulting file or code is{" "}
-        <strong>not uploaded to or stored by us</strong> — what you do with it,
-        including saving, printing, or sharing it, is entirely up to you.
+        Any file you export, any report you print, and any QR code you generate to
+        transfer data are created <strong>on your device</strong>, from data
+        already on your device, at the moment you ask for them. The resulting
+        file, report, or code is <strong>not uploaded to or stored by us</strong>.
+        What you do with it, including saving, printing, or sharing it, is
+        entirely up to you. Files you import (a backup or a CSV) are read on your
+        device too.
       </p>
       <p>
         Depending on where you live, you may have additional rights under laws

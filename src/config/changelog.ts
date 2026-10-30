@@ -23,6 +23,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.0",
+    date: "October 31, 2026",
+    title: "Budgets, search, and reports",
+    changes: [
+      { type: "new", text: "Monthly budgets for all spending or per category, with progress on Home and a heads-up at 80% and 100%." },
+      { type: "new", text: "Search and filter transactions by category, wallet, and date." },
+      { type: "new", text: "Add your own categories, each with its own icon." },
+      { type: "new", text: "A printable Summary Report: print it or save it as a PDF." },
+      { type: "new", text: "Export and import CSV files, with a preview before anything is added." },
+      { type: "new", text: "Recurring items can end on a date, and “Coming up” shows what’s due this week." },
+      { type: "new", text: "Edit a transfer: both sides update together, and you can set its date." },
+      { type: "new", text: "A quick setup for new users: pick your wallets in one tap." },
+      { type: "new", text: "Install the app from the banner, or use Add to Home Screen on iPhone." },
+      { type: "improved", text: "A new look for the Excel export: a summary sheet, real dates, peso amounts, wallets, and budgets." },
+      { type: "improved", text: "Forms remember the wallet and category you used last." },
+      { type: "improved", text: "Rename wallets, change their type, and put them in the order you like." },
+      { type: "improved", text: "On phones, notifications appear at the top of the screen, away from the buttons." },
+      { type: "improved", text: "The account menu shows whether your changes are saved, saving, or waiting for a connection." },
+      { type: "improved", text: "The app version now sits in the footer." },
+      { type: "improved", text: "Friendlier pages for broken links and unexpected errors." },
+      { type: "fixed", text: "Daily recurring items no longer add the same transaction many times in time zones ahead of UTC, such as the Philippines." },
+      { type: "fixed", text: "Weekly and monthly recurring items now land on the right dates." },
+      { type: "fixed", text: "With Autosave off, quick back-to-back changes are no longer lost." },
+    ],
+  },
+  {
     version: "2.1.0",
     date: "October 31, 2026",
     title: "Made for phones",

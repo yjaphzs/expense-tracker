@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Transaction, TransactionType } from "@/types/transaction";
 import { isTransfer, transferPartner } from "@/types/transaction";
+import { buildTransferLegs, type TransferInput } from "@/lib/transfers";
 
 /**
  * Derived transaction helpers over lifted state. The state itself lives in
@@ -19,6 +20,25 @@ export function useTransactionLogic(
         id: crypto.randomUUID(),
       };
       setTransactions((prev) => [newTransaction, ...prev]);
+    },
+    [setTransactions],
+  );
+
+  /** Adds several at once (CSV import, a transfer's two legs) and returns them for Undo. */
+  const addTransactions = useCallback(
+    (items: Omit<Transaction, "id">[]): Transaction[] => {
+      const added = items.map((data) => ({ ...data, id: crypto.randomUUID() }));
+      setTransactions((prev) => [...added, ...prev]);
+      return added;
+    },
+    [setTransactions],
+  );
+
+  /** Removes exactly these ids (undoing an import). */
+  const removeByIds = useCallback(
+    (ids: string[]) => {
+      const drop = new Set(ids);
+      setTransactions((prev) => prev.filter((t) => !drop.has(t.id)));
     },
     [setTransactions],
   );
@@ -60,6 +80,23 @@ export function useTransactionLogic(
     [setTransactions],
   );
 
+  /**
+   * Updates both legs of a transfer, keeping their ids. Older pairs without a
+   * `transferId` get one, so they stay paired from now on.
+   */
+  const editTransfer = useCallback(
+    (legs: [Transaction, Transaction], input: TransferInput, description: string) => {
+      const transferId = legs[0].transferId ?? legs[1].transferId ?? crypto.randomUUID();
+      const [from, to] = buildTransferLegs(input, transferId, description);
+      const next = new Map([
+        [legs[0].id, { ...from, id: legs[0].id }],
+        [legs[1].id, { ...to, id: legs[1].id }],
+      ]);
+      setTransactions((prev) => prev.map((t) => next.get(t.id) ?? t));
+    },
+    [setTransactions],
+  );
+
   const summary = useMemo(() => {
     // Transfers move money between your own wallets — they aren't income or
     // spending, so they're excluded from these totals.
@@ -88,9 +125,12 @@ export function useTransactionLogic(
 
   return {
     addTransaction,
+    addTransactions,
+    removeByIds,
     removeTransaction,
     restoreTransactions,
     editTransaction,
+    editTransfer,
     summary,
     getFilteredTransactions,
   };

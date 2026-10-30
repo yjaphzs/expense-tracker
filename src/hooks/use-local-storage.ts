@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { Dispatch, SetStateAction } from "react"
 
@@ -94,6 +94,13 @@ export function useLocalStorage<T>(
     return initialValue instanceof Function ? initialValue() : initialValue
   })
 
+  // Latest value, for functional updates. Reading localStorage instead would
+  // lose back-to-back updates whenever writing is disabled (`enabled: false`).
+  const latestRef = useRef(storedValue)
+  useEffect(() => {
+    latestRef.current = storedValue
+  }, [storedValue])
+
   // Return a wrapped version of useState's setter function that ...
   // ... persists the new value to localStorage.
   const setValue: Dispatch<SetStateAction<T>> = useEventCallback((value) => {
@@ -106,9 +113,10 @@ export function useLocalStorage<T>(
 
     try {
       // Allow value to be a function so we have the same API as useState
-      const newValue = value instanceof Function ? value(readValue()) : value
+      const newValue = value instanceof Function ? value(latestRef.current) : value
 
       // Save state
+      latestRef.current = newValue
       setStoredValue(newValue)
 
       if (options.enabled !== false) {

@@ -3,12 +3,16 @@ import type {
   Transaction,
   Wallet,
   RecurringTransaction,
+  Budget,
+  CustomCategory,
 } from "./transaction";
 
 export type {
   Transaction,
   Wallet,
   RecurringTransaction,
+  Budget,
+  CustomCategory,
   TransactionType,
   WalletType,
   RecurrenceFrequency,
@@ -22,6 +26,10 @@ export interface TrackerState {
   transactions: Transaction[];
   recurring: RecurringTransaction[];
   wallets: Wallet[];
+  /** Added in 2.2.0; older saves, backups and QR payloads have none (read as []). */
+  budgets: Budget[];
+  /** Added in 2.2.0; see `budgets`. */
+  categories: CustomCategory[];
   autosave: boolean;
 }
 

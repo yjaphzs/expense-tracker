@@ -107,10 +107,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>{children}</AuthProvider>
-          <Toaster
-            offset={{ bottom: "var(--toast-bottom)" }}
-            mobileOffset={{ bottom: "var(--toast-bottom)" }}
-          />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
