@@ -28,6 +28,28 @@ export function useWalletLogic(
     [setWallets],
   );
 
+  const editWallet = useCallback(
+    (id: string, changes: Pick<Wallet, "name" | "type">) => {
+      setWallets((prev) => prev.map((w) => (w.id === id ? { ...w, name: changes.name.trim(), type: changes.type } : w)));
+    },
+    [setWallets],
+  );
+
+  /** Moves a wallet one place up (-1) or down (+1); wallets show in this order everywhere. */
+  const moveWallet = useCallback(
+    (id: string, delta: -1 | 1) => {
+      setWallets((prev) => {
+        const from = prev.findIndex((w) => w.id === id);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= prev.length) return prev;
+        const next = [...prev];
+        [next[from], next[to]] = [next[to], next[from]];
+        return next;
+      });
+    },
+    [setWallets],
+  );
+
   const walletBalances = useMemo(() => {
     const map: Record<
       string,
@@ -58,6 +80,8 @@ export function useWalletLogic(
   return {
     addWallet,
     removeWallet,
+    editWallet,
+    moveWallet,
     walletBalances,
   };
 }

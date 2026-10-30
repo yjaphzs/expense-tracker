@@ -18,12 +18,15 @@ service firebase.storage {
       return request.resource.contentType.matches('image/.*');
     }
 
-    // Profile pictures — the only thing stored in Storage. One folder per user,
-    // owner-only. Capped at 5 MB and restricted to image content types.
-    match /users/{userId}/{allPaths=**} {
+    // Profile pictures, the only thing stored in Storage: one object per user
+    // at users/{uid}/avatar, owner-only. The app uploads a 512px WebP (well
+    // under 1 MB), so anything bigger, or any other path, is refused. That keeps
+    // storage (no free tier outside US regions) from growing past one small
+    // file per user.
+    match /users/{userId}/avatar {
       allow read: if isOwner(userId);
       allow write: if isOwner(userId)
-                   && isValidFileSize(5)
+                   && isValidFileSize(1)
                    && isValidImageType();
       allow delete: if isOwner(userId);
     }

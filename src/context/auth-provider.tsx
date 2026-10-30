@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { onAuthChange, type User } from '@/lib/firebase/auth';
+import { ensureAppCheck, rememberSession } from '@/lib/firebase/client';
 import {
   ensureUserProfile,
   userProfileRef,
@@ -56,7 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubProfileRef.current?.();
       unsubProfileRef.current = null;
 
+      // Lets the next page load start App Check before Auth restores the
+      // session (see client.ts).
+      rememberSession(firebaseUser !== null);
+
       if (firebaseUser) {
+        // Signed-in users talk to Firestore and Functions, so start App Check
+        // now (guests never need it; see client.ts).
+        ensureAppCheck();
         setUser(firebaseUser);
         try {
           // Make sure the profile doc exists (covers first Google sign-in and

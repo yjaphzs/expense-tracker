@@ -1,187 +1,133 @@
-import React, { useState } from "react";
+"use client";
+
+import { useEffect, useId, useState, type FormEvent } from "react";
+import { ArrowRightIcon } from "lucide-react";
+
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/shared/responsive-dialog";
+import { DatePickerField } from "@/components/shared/date-picker-field";
+import { FormDialogActions } from "@/components/shared/form-dialog-actions";
+import { AmountInput, Field } from "@/components/smart/form/field";
+import { WalletSelect } from "@/components/smart/form/form-selects";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowRightIcon, BanknoteIcon, CreditCardIcon } from "lucide-react";
-import type { Wallet, Transaction } from "@/types/transaction";
-import { TRANSFER_CATEGORY } from "@/types/transaction";
+import { useTracker } from "@/context/tracker-context";
+import { recallTransfer } from "@/lib/form-memory";
+import { todayStr } from "@/lib/recurring-schedule";
+import { defaultTransferDescription, transferInputFrom } from "@/lib/transfers";
 
-interface TransferDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  wallets: Wallet[];
-  onTransfer: (fromTx: Omit<Transaction, "id">, toTx: Omit<Transaction, "id">) => void;
-}
+/** Move money between two wallets, or edit an existing transfer (both sides change together). */
+export default function TransferDialog() {
+  const { data, dialogs, actions } = useTracker();
+  const { open, editing } = dialogs.transfer;
+  const wallets = data.wallets;
+  const id = useId();
 
-const TransferDialog: React.FC<TransferDialogProps> = ({
-  open,
-  onOpenChange,
-  wallets,
-  onTransfer,
-}) => {
   const [fromWalletId, setFromWalletId] = useState("");
   const [toWalletId, setToWalletId] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [date, setDate] = useState(todayStr);
 
-  const resetForm = () => {
-    setFromWalletId("");
-    setToWalletId("");
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      const input = transferInputFrom(editing);
+      setFromWalletId(input.fromWalletId);
+      setToWalletId(input.toWalletId);
+      setAmount(String(input.amount));
+      // Keep a generated "Transfer: A → B" out of the field so it follows wallet changes.
+      setDescription(input.description === defaultTransferDescription(wallets, input) ? "" : input.description);
+      setDate(input.date);
+      return;
+    }
+    const memory = recallTransfer();
+    const exists = (walletId?: string) => (wallets.some((w) => w.id === walletId) ? walletId! : "");
+    setFromWalletId(exists(memory.fromWalletId));
+    setToWalletId(exists(memory.toWalletId));
     setAmount("");
     setDescription("");
+    setDate(todayStr());
+    // Wallets aren't a dep: editing them elsewhere mustn't reset this form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing]);
+
+  const parsedAmount = parseFloat(amount);
+  const valid = !!fromWalletId && !!toWalletId && fromWalletId !== toWalletId && parsedAmount > 0;
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!valid) return;
+    const input = { fromWalletId, toWalletId, amount: parsedAmount, description: description.trim(), date };
+    actions.saveTransfer(input, input.description || defaultTransferDescription(wallets, input), editing);
+    dialogs.setTransferOpen(false);
   };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsedAmount = parseFloat(amount);
-    if (!fromWalletId || !toWalletId || fromWalletId === toWalletId || isNaN(parsedAmount) || parsedAmount <= 0) return;
-
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-    const fromWallet = wallets.find((w) => w.id === fromWalletId);
-    const toWallet = wallets.find((w) => w.id === toWalletId);
-    const desc = description.trim() || `Transfer: ${fromWallet?.name ?? "?"} → ${toWallet?.name ?? "?"}`;
-
-    onTransfer(
-      {
-        type: "expense",
-        category: TRANSFER_CATEGORY,
-        amount: parsedAmount,
-        description: desc,
-        date: dateStr,
-        walletId: fromWalletId,
-        transfer: true,
-      },
-      {
-        type: "income",
-        category: TRANSFER_CATEGORY,
-        amount: parsedAmount,
-        description: desc,
-        date: dateStr,
-        walletId: toWalletId,
-        transfer: true,
-      }
-    );
-    resetForm();
-    onOpenChange(false);
-  };
-
-  const isValid =
-    fromWalletId &&
-    toWalletId &&
-    fromWalletId !== toWalletId &&
-    amount &&
-    parseFloat(amount) > 0;
-
-  const WalletIcon = ({ type }: { type: string }) =>
-    type === "cash" ? <BanknoteIcon className="size-4" /> : <CreditCardIcon className="size-4" />;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Transfer Between Wallets</DialogTitle>
-          <DialogDescription>
-            Move funds from one wallet to another.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-2 flex-1">
-              <label className="text-sm font-medium text-muted-foreground">From</label>
-              <Select value={fromWalletId} onValueChange={setFromWalletId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Source wallet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {wallets.map((w) => (
-                    <SelectItem key={w.id} value={w.id} disabled={w.id === toWalletId}>
-                      <span className="flex items-center gap-2">
-                        <WalletIcon type={w.type} />
-                        {w.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+    <ResponsiveDialog open={open} onOpenChange={dialogs.setTransferOpen}>
+      <ResponsiveDialogContent className="sm:max-w-md">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>{editing ? "Edit Transfer" : "Transfer Between Wallets"}</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
+            {editing ? "Both sides of the transfer update together." : "Move funds from one wallet to another."}
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody>
+          <form id={id} onSubmit={onSubmit} className="flex flex-col gap-4">
+            {/* From and To sit side by side from sm up, stacked on phones. */}
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:gap-2">
+              <div className="flex flex-1 flex-col">
+                <Field id={`${id}-from`} label="From">
+                  <WalletSelect
+                    id={`${id}-from`}
+                    wallets={wallets}
+                    value={fromWalletId}
+                    onChange={setFromWalletId}
+                    placeholder="Source wallet"
+                    disabledId={toWalletId}
+                  />
+                </Field>
+              </div>
+              <div className="flex items-center justify-center pt-2 sm:pt-0 sm:pb-2" aria-hidden>
+                <ArrowRightIcon className="size-5 rotate-90 text-muted-foreground sm:rotate-0" />
+              </div>
+              <div className="flex flex-1 flex-col">
+                <Field id={`${id}-to`} label="To">
+                  <WalletSelect
+                    id={`${id}-to`}
+                    wallets={wallets}
+                    value={toWalletId}
+                    onChange={setToWalletId}
+                    placeholder="Target wallet"
+                    disabledId={fromWalletId}
+                  />
+                </Field>
+              </div>
             </div>
-            <div className="flex items-center justify-center pb-2">
-              <ArrowRightIcon className="size-5 text-muted-foreground" />
-            </div>
-            <div className="flex flex-col gap-2 flex-1">
-              <label className="text-sm font-medium text-muted-foreground">To</label>
-              <Select value={toWalletId} onValueChange={setToWalletId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Target wallet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {wallets.map((w) => (
-                    <SelectItem key={w.id} value={w.id} disabled={w.id === fromWalletId}>
-                      <span className="flex items-center gap-2">
-                        <WalletIcon type={w.type} />
-                        {w.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">Amount</label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-              className="font-mono"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-muted-foreground">
-              Description <span className="text-muted-foreground/50">(optional)</span>
-            </label>
-            <Input
-              type="text"
-              placeholder="e.g. Move savings to cash"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={100}
-            />
-          </div>
-
-          <DialogFooter className="mt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!isValid}>
-              Transfer
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <Field id={`${id}-amount`} label="Amount">
+              <AmountInput id={`${id}-amount`} value={amount} onChange={setAmount} />
+            </Field>
+            <Field id={`${id}-date`} label="Date">
+              <DatePickerField id={`${id}-date`} value={date} onChange={setDate} />
+            </Field>
+            <Field id={`${id}-description`} label="Description" optional>
+              <Input
+                id={`${id}-description`}
+                placeholder="e.g. Move savings to cash"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={100}
+              />
+            </Field>
+          </form>
+        </ResponsiveDialogBody>
+        <FormDialogActions formId={id} submitLabel={editing ? "Save Changes" : "Transfer"} disabled={!valid} />
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
-};
-
-export default TransferDialog;
+}

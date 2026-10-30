@@ -24,9 +24,13 @@ export async function uploadAvatar(uid: string, source: Blob): Promise<string> {
   const objectRef = avatarRef(uid);
   await uploadBytes(objectRef, blob, {
     contentType: type || source.type || 'image/webp',
-    cacheControl: 'public,max-age=3600',
+    // Cached for 30 days: the header shows the avatar on every page. The
+    // version param below gives each upload a new URL, so a changed photo
+    // still shows right away.
+    cacheControl: 'public,max-age=2592000',
   });
-  return getDownloadURL(objectRef);
+  const url = await getDownloadURL(objectRef);
+  return `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
 }
 
 /** Deletes the user's avatar. Silently ignores a missing object. */

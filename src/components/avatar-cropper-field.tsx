@@ -117,6 +117,13 @@ export function AvatarCropperField({
             <CameraIcon className="size-6 text-white" />
           )}
         </span>
+        {/* Touch screens have no hover, so a small badge marks the photo as tappable. */}
+        <span
+          aria-hidden
+          className="absolute -right-0.5 -bottom-0.5 hidden size-7 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground pointer-coarse:flex"
+        >
+          <CameraIcon className="size-3.5" />
+        </span>
       </button>
 
       <div className="min-w-0 flex-1 space-y-1.5">

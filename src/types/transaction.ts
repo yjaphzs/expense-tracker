@@ -16,6 +16,31 @@ export interface Transaction {
    * transfer just moves your own money, it isn't real income or spending.
    */
   transfer?: boolean;
+  /**
+   * Shared by the two legs of one transfer, so deleting (or undoing) one leg
+   * acts on both. Absent on transfers made before it existed; those are paired
+   * by date, amount and direction instead (see `transferPartner`).
+   */
+  transferId?: string;
+}
+
+/**
+ * The other leg of a transfer, or undefined for a normal transaction (or a
+ * leg whose partner is already gone).
+ */
+export function transferPartner(all: Transaction[], t: Transaction): Transaction | undefined {
+  if (!isTransfer(t)) return undefined;
+  if (t.transferId) return all.find((o) => o.id !== t.id && o.transferId === t.transferId);
+  return all.find(
+    (o) =>
+      o.id !== t.id &&
+      isTransfer(o) &&
+      !o.transferId &&
+      o.date === t.date &&
+      o.amount === t.amount &&
+      o.type !== t.type &&
+      o.walletId !== t.walletId,
+  );
 }
 
 /** Category used for both legs of a wallet-to-wallet transfer. */
@@ -76,4 +101,25 @@ export interface RecurringTransaction {
   lastProcessedDate: string | null;
   enabled: boolean;
   walletId: string;
+  /** Last date it may add a transaction on ("YYYY-MM-DD"). Omitted: repeats forever. */
+  endDate?: string;
+}
+
+/**
+ * A monthly spending limit. Without `category` it caps the whole month's
+ * expenses; with one, just that expense category. Transfers never count.
+ */
+export interface Budget {
+  id: string;
+  category?: string;
+  amount: number;
+}
+
+/** A category the user added on top of the built-in lists. */
+export interface CustomCategory {
+  id: string;
+  name: string;
+  type: TransactionType;
+  /** Key into CATEGORY_ICON_CHOICES (src/lib/categories.ts). */
+  icon: string;
 }

@@ -8,7 +8,7 @@ import { useAuth } from "@/context/auth-provider";
 import { updateProfile } from "@/lib/firebase/auth";
 import { updateUserProfile } from "@/lib/firebase/firestore";
 import { uploadAvatar } from "@/lib/firebase/storage";
-import { requestEmailVerification } from "@/lib/firebase/callable";
+import { deliverVerificationEmail } from "@/lib/firebase/email-delivery";
 import { getAuthErrorMessage } from "@/lib/firebase/errors";
 import { AvatarCropperField } from "@/components/avatar-cropper-field";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +81,7 @@ export function ProfileTab() {
   async function handleResendVerification() {
     setResending(true);
     try {
-      await requestEmailVerification();
+      await deliverVerificationEmail();
       toast.success("Verification email sent — check your inbox.");
     } catch (err) {
       toast.error(getAuthErrorMessage(err));

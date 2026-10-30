@@ -1,261 +1,82 @@
-import React, { useState, useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
-import {
-  Trash2Icon,
-  WalletIcon,
-  PencilIcon,
-  ArrowLeftRightIcon,
-} from "lucide-react";
-import { getCategoryIcon } from "@/lib/category-icons";
-import type { Transaction, Wallet } from "@/types/transaction";
-import { isTransfer } from "@/types/transaction";
-import { formatCurrency } from "@/lib/utils";
+"use client";
+
+import { useMemo, useState } from "react";
+
 import Paginator from "@/components/smart/paginator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { PageSizeSelect } from "@/components/smart/page-size-select";
+import { TransactionActionSheet } from "@/components/smart/transaction-action-sheet";
+import { TransactionRow } from "@/components/smart/transaction-row";
+import { useTracker } from "@/context/tracker-context";
+import type { Transaction } from "@/types/transaction";
 
-const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
+const formatDay = (date: string) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
-interface TransactionListProps {
-  transactions: Transaction[];
-  wallets: Wallet[];
-  onRemove: (id: string) => void;
-  onEdit?: (transaction: Transaction) => void;
-}
-
-const TransactionList: React.FC<TransactionListProps> = ({
-  transactions,
-  wallets,
-  onRemove,
-  onEdit,
-}) => {
-  const walletMap = Object.fromEntries(wallets.map((w) => [w.id, w.name]));
+/** Newest first, paginated, grouped by day. Edit and Delete act through the tracker's actions. */
+export default function TransactionList({ transactions }: { transactions: Transaction[] }) {
+  const { data, actions } = useTracker();
+  const walletName = useMemo(() => Object.fromEntries(data.wallets.map((w) => [w.id, w.name])), [data.wallets]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  // Phones: tapping a row opens its action sheet. The tapped row outlives
+  // `sheetOpen` so the sheet keeps its content while it animates closed.
+  const [tapped, setTapped] = useState<Transaction | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Sort all transactions by date descending, then paginate
-  const sorted = useMemo(
-    () => [...transactions].sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions]
-  );
-
+  const sorted = useMemo(() => [...transactions].sort((a, b) => b.date.localeCompare(a.date)), [transactions]);
   const totalPages = Math.ceil(sorted.length / pageSize);
+  const page = Math.min(currentPage, totalPages || 1);
+  if (page !== currentPage) setCurrentPage(page);
 
-  // Reset page if it goes out of bounds
-  const safePage = Math.min(currentPage, totalPages || 1);
-  if (safePage !== currentPage) setCurrentPage(safePage);
-
-  const paged = useMemo(
-    () => sorted.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [sorted, safePage, pageSize]
-  );
-
-  if (transactions.length === 0) {
-    return (
-      <Empty className="mt-4">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <WalletIcon />
-          </EmptyMedia>
-          <EmptyTitle>No transactions yet</EmptyTitle>
-          <EmptyDescription>
-            Add your first income or expense to get started.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
-
-  // Group the paged transactions by date
-  const grouped = paged.reduce<Record<string, Transaction[]>>(
-    (acc, t) => {
-      const key = t.date;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(t);
-      return acc;
-    },
-    {}
-  );
-
-  const sortedDates = Object.keys(grouped).sort(
-    (a, b) => new Date(b).getTime() - new Date(a).getTime()
-  );
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + "T00:00:00");
-    return date.toLocaleDateString(undefined, {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const days = useMemo(() => {
+    const groups = new Map<string, Transaction[]>();
+    for (const t of sorted.slice((page - 1) * pageSize, page * pageSize)) {
+      groups.set(t.date, [...(groups.get(t.date) ?? []), t]);
+    }
+    return [...groups.entries()];
+  }, [sorted, page, pageSize]);
 
   return (
-    <div className="flex flex-col gap-6 mt-4">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>Show</span>
-        <Select
-          value={String(pageSize)}
-          onValueChange={(v) => {
-            setPageSize(Number(v));
-            setCurrentPage(1);
-          }}
-        >
-          <SelectTrigger className="h-7 w-[70px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAGE_SIZE_OPTIONS.map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span>per page</span>
-      </div>
-      {sortedDates.map((date) => (
+    <div className="mt-4 flex flex-col gap-6">
+      <PageSizeSelect
+        value={pageSize}
+        onChange={(size) => {
+          setPageSize(size);
+          setCurrentPage(1);
+        }}
+      />
+      {days.map(([date, items]) => (
         <div key={date} className="flex flex-col gap-2">
-          <div className="text-xs font-medium text-muted-foreground/60 tracking-wider">
-            {formatDate(date)}
-          </div>
-          <div className="flex flex-col gap-2">
-            {grouped[date].map((t) => {
-              const transfer = isTransfer(t);
-              return (
-              <div
-                key={t.id}
-                className="flex items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
-              >
-                <div
-                  className={`flex items-center justify-center size-9 rounded-full shrink-0 ${
-                    transfer
-                      ? "bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400"
-                      : t.type === "income"
-                      ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-                      : "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                  }`}
-                >
-                  {transfer
-                    ? <ArrowLeftRightIcon className="size-4" />
-                    : (() => { const Icon = getCategoryIcon(t.category); return <Icon className="size-4" />; })()}
-                </div>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">
-                      {t.description || t.category}
-                    </span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">
-                      {t.category}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {t.description && (
-                      <span className="text-xs text-muted-foreground truncate">
-                        {t.category}
-                      </span>
-                    )}
-                    {walletMap[t.walletId] && (
-                      <span className="text-[10px] text-muted-foreground/60">
-                        {t.description ? " · " : ""}{walletMap[t.walletId]}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`text-sm font-mono font-bold ${
-                      transfer
-                        ? "text-sky-600 dark:text-sky-400"
-                        : t.type === "income"
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {t.type === "income" ? "+" : "-"}
-                    {formatCurrency(t.amount)}
-                  </span>
-                  <ButtonGroup>
-                    {onEdit && (
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={() => onEdit(t)}
-                      >
-                        <PencilIcon className="size-3.5" />
-                      </Button>
-                    )}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon-sm">
-                          <Trash2Icon className="size-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently remove this {transfer ? "transfer" : t.type} of{" "}
-                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                              {formatCurrency(t.amount)}
-                            </code>{" "}
-                            <code className="bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                              ({t.category})
-                            </code>.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => onRemove(t.id)}
-                            className="bg-destructive text-white hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </ButtonGroup>
-                </div>
-              </div>
-              );
-            })}
-          </div>
+          <div className="text-xs font-medium tracking-wider text-muted-foreground/60">{formatDay(date)}</div>
+          {items.map((t) => (
+            <TransactionRow
+              key={t.id}
+              transaction={t}
+              walletName={walletName[t.walletId]}
+              onEdit={actions.openEdit}
+              onRemove={actions.deleteTransaction}
+              onTap={(row) => {
+                setTapped(row);
+                setSheetOpen(true);
+              }}
+            />
+          ))}
         </div>
       ))}
-      <Paginator
-        currentPage={safePage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
+      <Paginator currentPage={page} totalPages={totalPages} onPageChange={setCurrentPage} />
+      <TransactionActionSheet
+        transaction={tapped}
+        walletName={tapped ? walletName[tapped.walletId] : undefined}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onEdit={actions.openEdit}
+        onRemove={actions.deleteTransaction}
       />
     </div>
   );
-};
-
-export default TransactionList;
+}

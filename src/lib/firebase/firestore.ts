@@ -9,6 +9,7 @@ import {
 import { db } from './client';
 import type { User } from './auth';
 import type { TrackerState, UserProfile } from '@/types';
+import { emptyState, normalizeState } from '@/lib/tracker-state';
 
 // ── Document references ─────────────────────────────────────────────────────
 export function userProfileRef(uid: string): DocumentReference {
@@ -58,21 +59,6 @@ export async function updateUserProfile(
 }
 
 // ── Tracker state ─────────────────────────────────────────────────────────────
-const EMPTY_STATE: TrackerState = {
-  transactions: [],
-  recurring: [],
-  wallets: [],
-  autosave: true,
-};
-
-function normalizeState(data: Record<string, unknown>): TrackerState {
-  return {
-    transactions: Array.isArray(data.transactions) ? data.transactions : [],
-    recurring: Array.isArray(data.recurring) ? data.recurring : [],
-    wallets: Array.isArray(data.wallets) ? data.wallets : [],
-    autosave: typeof data.autosave === 'boolean' ? data.autosave : true,
-  };
-}
 
 /** Reads the tracker state once. Returns null when nothing is saved yet. */
 export async function getTrackerState(
@@ -123,7 +109,7 @@ export function subscribeTrackerState(
         hasPendingWrites: snap.metadata.hasPendingWrites,
       };
       if (!snap.exists()) {
-        callback(EMPTY_STATE, meta);
+        callback(emptyState(), meta);
         return;
       }
       callback(normalizeState(snap.data()), meta);

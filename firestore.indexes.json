@@ -1,4 +1,36 @@
 {
   "indexes": [],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "rateLimits",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "transactions",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "recurring",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "wallets",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "budgets",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tracker",
+      "fieldPath": "categories",
+      "indexes": []
+    }
+  ]
 }

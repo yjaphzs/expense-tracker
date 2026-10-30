@@ -24,8 +24,17 @@ const FIREBASE_ORIGINS = [
   "cloudfunctions.net",
 ];
 
+// Cache on use: precache only the app shell ("/", added in next.config.ts).
+// The build's ~70 JS/CSS/font files are NOT downloaded up front (that cost
+// every first-time visitor about 1.5 MB of Hosting transfer); defaultCache
+// stores each one the first time it's used, and PwaRegister hands over the
+// files the first page already loaded, so offline still works after one visit.
+const shellOnly = (self.__SW_MANIFEST ?? []).filter(
+  (entry) => (typeof entry === "string" ? entry : entry.url) === "/",
+);
+
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: shellOnly,
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
@@ -37,6 +46,17 @@ const serwist = new Serwist({
     },
     ...defaultCache,
   ],
+  // When a navigation can't be served (offline, and the route wasn't cached),
+  // fall back to the precached app shell ("/"). The app is a client-rendered
+  // SPA, so the shell boots and the router takes over from there.
+  fallbacks: {
+    entries: [
+      {
+        url: "/",
+        matcher: ({ request }) => request.destination === "document",
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();
