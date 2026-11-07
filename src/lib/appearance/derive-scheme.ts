@@ -7,10 +7,18 @@ export interface ModeTokens {
   foreground: "black" | "white";
   /** chart-1 (lightest) … chart-5 (= primary). */
   chart: Oklch[];
+  /**
+   * The logo is an accent glyph on a black tile. When the accent is too dark
+   * to show on black (the Black scheme in light mode), the tile takes the
+   * accent and the glyph takes the button text color instead.
+   */
+  logoOnAccent: boolean;
 }
 
 // Body text on a button: WCAG AA for normal-size text.
 export const TEXT_CONTRAST = 4.5;
+// A logo glyph against its tile: WCAG AA for graphics.
+export const GRAPHIC_CONTRAST = 3;
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const at = (base: Oklch, l: number): Oklch => toGamut({ ...base, l: clamp(l, 0, 1) });
 
@@ -42,7 +50,12 @@ export function deriveLight(seed: Oklch): ModeTokens {
   const white = search(base, base.l, Math.max(0.2, base.l - 0.18), readsWhite);
   const black = white ? null : search(base, base.l, 0.98, readsBlack);
   const primary = white ?? black ?? at(base, 0.35);
-  return { primary, foreground: white || !black ? "white" : "black", chart: chartRamp(primary) };
+  return {
+    primary,
+    foreground: white || !black ? "white" : "black",
+    chart: chartRamp(primary),
+    logoOnAccent: contrast(primary, BLACK) < GRAPHIC_CONTRAST,
+  };
 }
 
 /**
@@ -55,7 +68,12 @@ export function deriveDark(seed: Oklch): ModeTokens {
   const black = search(base, base.l, Math.min(0.98, base.l + 0.15), readsBlack);
   const primary =
     black ?? search(base, base.l, 0.2, (c) => contrast(c, WHITE) >= TEXT_CONTRAST) ?? at(base, 0.4);
-  return { primary, foreground: black ? "black" : "white", chart: chartRamp(primary) };
+  return {
+    primary,
+    foreground: black ? "black" : "white",
+    chart: chartRamp(primary),
+    logoOnAccent: contrast(primary, BLACK) < GRAPHIC_CONTRAST,
+  };
 }
 
 function declarations(tokens: ModeTokens): string {
@@ -68,6 +86,8 @@ function declarations(tokens: ModeTokens): string {
     `--sidebar-primary-foreground: ${fg}`,
     `--ring: ${primary}`,
     ...tokens.chart.map((c, i) => `--chart-${i + 1}: ${formatOklch(c)}`),
+    `--logo-tile: ${tokens.logoOnAccent ? primary : "oklch(0 0 0)"}`,
+    `--logo-mark: ${tokens.logoOnAccent ? fg : primary}`,
   ].join("; ");
 }
 

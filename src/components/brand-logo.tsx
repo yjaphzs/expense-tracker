@@ -1,6 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
-import logo from "@/assets/images/expense-tracker.jpg";
+import { BrandMark } from "@/components/brand-mark";
 import { APP_NAME } from "@/config/app";
 import { cn } from "@/lib/utils";
 
@@ -24,15 +23,8 @@ export function BrandLogo({
       className={cn("flex items-center gap-2", className)}
       aria-label={APP_NAME}
     >
-      <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary-foreground">
-        <Image
-          src={logo}
-          alt=""
-          width={32}
-          height={32}
-          className="size-full object-cover"
-          priority
-        />
+      <span className="flex size-8 shrink-0 overflow-hidden rounded-md">
+        <BrandMark />
       </span>
       {showName && (
         <Name className={cn("text-base font-extrabold tracking-tight", nameClassName)}>
