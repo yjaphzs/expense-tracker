@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeftIcon } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppearanceButton } from "@/components/appearance/appearance-button";
 
 // Shared typography for the legal documents — keeps Terms and Privacy
 // consistent without pulling in a Tailwind typography plugin.
@@ -28,7 +28,7 @@ export default function LegalLayout({
     <div className="mx-auto flex min-h-svh w-full max-w-3xl flex-col gap-6 p-4 md:p-8">
       <header className="flex items-center justify-between">
         <BrandLogo />
-        <ThemeToggle />
+        <AppearanceButton />
       </header>
 
       <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">

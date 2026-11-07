@@ -47,6 +47,10 @@ export default function PrivacyPolicyPage() {
           display name, and an optional profile photo you upload.
         </li>
         <li>
+          <strong>Your appearance setting:</strong> the color scheme and light
+          or dark mode you pick, so your other devices match.
+        </li>
+        <li>
           <strong>Authentication data</strong> — managed by Firebase
           Authentication. If you sign in with Google, we receive your basic
           Google profile (name, email, and photo) to create your account. We
@@ -104,8 +108,8 @@ export default function PrivacyPolicyPage() {
       <p>
         We don&apos;t use tracking or advertising cookies. We use your
         browser&apos;s local storage to keep guest data and remember your theme
-        preference, and Firebase Authentication uses local storage to keep you
-        signed in. These are strictly functional.
+        and color scheme, and Firebase Authentication uses local storage to keep
+        you signed in. These are strictly functional.
       </p>
 
       <h2>6. Data retention and deletion</h2>
