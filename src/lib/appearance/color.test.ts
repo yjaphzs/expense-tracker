@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BLACK, contrast, hexToOklch, oklchToHex, toGamut, WHITE } from "./color";
-import { deriveDark, deriveLight, TEXT_CONTRAST, type ModeTokens } from "./derive-scheme";
+import { deriveDark, deriveLight, GRAPHIC_CONTRAST, TEXT_CONTRAST, type ModeTokens } from "./derive-scheme";
 import { cssForChoice, isValidChoice, SCHEME_PRESETS } from "./schemes";
 
 const fg = (t: ModeTokens) => (t.foreground === "black" ? BLACK : WHITE);
@@ -47,6 +47,19 @@ describe("derived schemes stay readable", () => {
     expect(l.chart).toHaveLength(5);
   });
 
+  it.each(seeds)("$name: the logo glyph shows on its tile in both modes", ({ light, dark }) => {
+    for (const t of [deriveLight(light), deriveDark(dark)]) {
+      const [tile, mark] = t.logoOnAccent ? [t.primary, fg(t)] : [BLACK, t.primary];
+      expect(contrast(tile, mark)).toBeGreaterThanOrEqual(GRAPHIC_CONTRAST);
+    }
+  });
+
+  it("puts the Black scheme's light logo on an accent tile", () => {
+    const black = SCHEME_PRESETS.find((s) => s.id === "black")!;
+    expect(deriveLight(black.light).logoOnAccent).toBe(true);
+    expect(deriveDark(black.dark).logoOnAccent).toBe(false);
+  });
+
   it("keeps hues close to what was picked", () => {
     const pink = deriveLight(hexToOklch("#ec4899")!);
     expect(Math.abs(pink.primary.h - 354.3)).toBeLessThan(2);
@@ -68,7 +81,7 @@ describe("scheme CSS", () => {
     const css = cssForChoice({ scheme: "custom", accent: "#7c3aed" })!;
     expect(css).toContain(':root[data-scheme="custom"] {');
     expect(css).toContain(':root.dark[data-scheme="custom"] {');
-    for (const token of ["--primary:", "--primary-foreground:", "--ring:", "--chart-1:", "--chart-5:", "--sidebar-primary:"]) {
+    for (const token of ["--primary:", "--primary-foreground:", "--ring:", "--chart-1:", "--chart-5:", "--sidebar-primary:", "--logo-tile:", "--logo-mark:"]) {
       expect(css.split(token)).toHaveLength(3);
     }
   });

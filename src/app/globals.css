@@ -61,6 +61,10 @@
   --spacing: 0.25rem;
   /* Dot-grid color for the auth banner (dark dots on the light panel). */
   --dot-color: rgba(0, 0, 0, 0.16);
+  /* The logo (components/brand-mark.tsx): accent glyph on a black tile.
+     Color schemes override these when the accent is too dark for black. */
+  --logo-tile: oklch(0 0 0);
+  --logo-mark: var(--primary);
 }
 
 .dark {
