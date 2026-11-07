@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppCheckActivator } from "@/components/app-check-activator";
 import { AuthBanner } from "@/components/auth-banner";
 import { BrandLogo } from "@/components/brand-logo";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppearanceButton } from "@/components/appearance/appearance-button";
 
 // Mirrors the (auth) split-screen layout, but WITHOUT GuestGuard — account
 // actions (verify email / reset password) must work whether the user is signed
@@ -18,7 +18,7 @@ export default function AuthActionLayout({
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex items-center justify-between">
           <BrandLogo />
-          <ThemeToggle />
+          <AppearanceButton />
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm">{children}</div>

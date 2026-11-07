@@ -3,7 +3,7 @@ import { AppCheckActivator } from "@/components/app-check-activator";
 import { AuthBanner } from "@/components/auth-banner";
 import { BrandLogo } from "@/components/brand-logo";
 import { GuestGuard } from "@/components/guest-guard";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppearanceButton } from "@/components/appearance/appearance-button";
 
 export default function AuthLayout({
   children,
@@ -17,7 +17,7 @@ export default function AuthLayout({
         <div className="flex flex-col gap-4 p-6 md:p-10">
           <div className="flex items-center justify-between">
             <BrandLogo />
-            <ThemeToggle />
+            <AppearanceButton />
           </div>
           <div className="flex flex-1 items-center justify-center">
             <div className="w-full max-w-xs">{children}</div>

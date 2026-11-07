@@ -6,6 +6,8 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/context/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { PwaRegister } from "@/components/pwa-register";
+import { AppearanceSync } from "@/components/appearance/appearance-sync";
+import { SCHEME_SCRIPT } from "@/lib/appearance/scheme-script";
 
 const fontSans = Roboto({
   subsets: ["latin"],
@@ -90,6 +92,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Restores the saved color scheme before the first paint (no amber flash). */}
+        <script dangerouslySetInnerHTML={{ __html: SCHEME_SCRIPT }} />
+      </head>
       <body
         className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}
       >
@@ -106,7 +112,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <AppearanceSync />
+            {children}
+          </AuthProvider>
           <Toaster />
         </ThemeProvider>
       </body>

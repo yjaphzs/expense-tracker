@@ -23,6 +23,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.0",
+    date: "November 7, 2026",
+    title: "Make it yours",
+    changes: [
+      { type: "new", text: "Color schemes: Amber, Pink, Red, Green, Teal, Blue, Purple, Black, or any color you pick." },
+      { type: "new", text: "Choose light, dark, or follow your device, all in the new Appearance settings." },
+      { type: "improved", text: "Buttons, charts, and the browser tab icon follow your color scheme." },
+      { type: "improved", text: "When you're signed in, your color scheme and mode follow you to your other devices." },
+    ],
+  },
+  {
     version: "2.2.0",
     date: "October 31, 2026",
     title: "Budgets, search, and reports",

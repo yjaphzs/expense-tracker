@@ -3,7 +3,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppearanceButton } from "@/components/appearance/appearance-button";
 
 export default function AccountLayout({
   children,
@@ -15,7 +15,7 @@ export default function AccountLayout({
       <div className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-5 p-4 md:p-8">
         <header className="flex items-center justify-between">
           <BrandLogo />
-          <ThemeToggle />
+          <AppearanceButton />
         </header>
         <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
           <Link href="/">

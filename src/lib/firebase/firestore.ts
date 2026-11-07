@@ -49,7 +49,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
 /** Merges fields into the profile document. */
 export async function updateUserProfile(
   uid: string,
-  data: Partial<Pick<UserProfile, 'displayName' | 'photoURL' | 'email'>>,
+  data: Partial<Pick<UserProfile, 'displayName' | 'photoURL' | 'email' | 'appearance'>>,
 ): Promise<void> {
   await setDoc(
     userProfileRef(uid),

@@ -1,6 +1,6 @@
 import { AccountMenu } from "@/components/account-menu";
 import { BrandLogo } from "@/components/brand-logo";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppearanceButton } from "@/components/appearance/appearance-button";
 import { WhatsNewButton } from "@/components/whats-new";
 
 /**
@@ -14,7 +14,7 @@ export function SiteHeader() {
         <BrandLogo asHeading className="min-w-0" nameClassName="truncate text-base sm:text-xl" />
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           <WhatsNewButton />
-          <ThemeToggle />
+          <AppearanceButton />
           <AccountMenu />
         </div>
       </div>
